@@ -21,6 +21,9 @@ import agents from '../shared/fixtures/agents.json' with {type: 'json'};
 
 const CHEAP_AGENT = agents[1].agentIdentifier;
 
+// The Payment Service acts on its own this long after a deadline: it refunds a no-show and collects for the seller.
+const NODE_ACTION_DELAY_MS = 10 * MINUTE_MS;
+
 const copyText = (row) => `${String(row.name).trim()}, sold by ${String(row.unit).trim()}.`;
 
 function buildResult(agentIdentifier, job, faults) {
@@ -32,16 +35,18 @@ function buildResult(agentIdentifier, job, faults) {
   return JSON.stringify(short ? rows.slice(0, -faults.dropRows) : rows);
 }
 
-const nextState = (record, faults) => {
+const nextState = (record, faults, now) => {
   const cheap = record.agentIdentifier === CHEAP_AGENT;
   switch (record.onChainState) {
     case null:
       return 'FundsLocked';
     case 'FundsLocked':
       if (record.refundRequested) return 'RefundRequested';
-      return cheap && faults.noShow ? null : 'ResultSubmitted';
+      if (cheap && faults.noShow) return now >= record.submitResultTime + NODE_ACTION_DELAY_MS ? 'RefundWithdrawn' : null;
+      return 'ResultSubmitted';
     case 'ResultSubmitted':
-      return record.refundRequested ? 'Disputed' : null;
+      if (record.refundRequested) return 'Disputed';
+      return now >= record.unlockTime + NODE_ACTION_DELAY_MS ? 'Withdrawn' : null;
     case 'RefundRequested':
     case 'Disputed':
       return faults.refuseRefund ? null : 'RefundAuthorized';
@@ -64,10 +69,16 @@ export function createMockPayments({faults = {}, clock = Date.now} = {}) {
     return counter;
   };
 
+  // The contract empties the result hash when the seller authorizes a refund.
+  const resultHashAfter = (state, record) => {
+    if (state === 'ResultSubmitted') return resultHash(jobs.get(record.jobId).result, record.nonce);
+    return state === 'RefundAuthorized' ? null : record.resultHash;
+  };
+
   const withTransaction = (record, state) => ({
     ...record,
     onChainState: state,
-    resultHash: state === 'ResultSubmitted' ? resultHash(jobs.get(record.jobId).result, record.nonce) : record.resultHash,
+    resultHash: resultHashAfter(state, record),
     transactions: [...record.transactions, {txHash: `mock-tx-${nextId()}`, status: 'Confirmed', newOnChainState: state}],
   });
 
@@ -133,6 +144,8 @@ export function createMockPayments({faults = {}, clock = Date.now} = {}) {
         agentIdentifier: quote.agentIdentifier,
         jobId: quote.jobId,
         nonce: quote.identifierFromPurchaser,
+        submitResultTime: quote.submitResultTime,
+        unlockTime: quote.unlockTime,
         price: fixture.price,
         metadata,
         onChainState: null,
@@ -147,7 +160,7 @@ export function createMockPayments({faults = {}, clock = Date.now} = {}) {
 
     async getPurchase(blockchainIdentifier) {
       const record = findPurchase(blockchainIdentifier);
-      const state = nextState(record, faults);
+      const state = nextState(record, faults, clock());
       const updated = state ? withTransaction(record, state) : record;
       purchases.set(blockchainIdentifier, updated);
       return toView(updated);
