@@ -5,6 +5,7 @@ import {verifySettlement} from './settlement.mjs';
 import {loadSokosumiRuntime} from './sokosumi-runtime.mjs';
 import {taskTarget,assertTaskTarget,verifyRuntimeTask} from './task-target.mjs';
 const MINUTE=60*1000;
+const MAX_TELL_TRIES=3;
 export const USDM='16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d';
 export function taskHash(text){return createHash('sha256').update(text,'utf8').digest('hex')}
 export function confirmedState(payment,expected){
@@ -49,19 +50,24 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
  }
  async function persist(task,state,paid){const next={...state,paid};await save(task.id,next);return next;}
  async function tellOwner(task,state,p){
+  const tellTries=(p.tellTries??0)+1;
+  const next={...p,tellTries};
+  state=await persist(task,state,next);
   await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{comment:`This job could not be finished (${p.failure}). No result was submitted, so the seller cannot collect this payment.`});
-  return persist(task,state,{...p,ownerTold:true});
+  return persist(task,state,{...next,ownerTold:true});
  }
  async function failJob(task,state,p,failure){
   const next={...p,stage:'job-failed',failure};
   return tellOwner(task,await persist(task,state,next),next);
  }
+ const isLate=(p)=>Date.now()>=Number(p.payment.submitResultTime);
+ const lateFailure='the result deadline passed before the work was done';
  async function produceResult(task,state,p){
-  const deadline=Number(p.payment.submitResultTime);
-  if(Date.now()>=deadline)throw new Error('Result deadline expired before model send');
+  if(isLate(p))return failJob(task,state,p,lateFailure);
   let result;
-  try{result=await answer(state.input,`.local/${task.id}-session.json`,deadline,task.id);}
+  try{result=await answer(state.input,`.local/${task.id}-session.json`,Number(p.payment.submitResultTime),task.id);}
   catch(error){if(error.isFinal)return failJob(task,state,p,error.message);throw error;}
+  if(isLate(p))return failJob(task,state,p,lateFailure);
   if(typeof result!=='string'||!result.trim())throw new Error('Model did not return a result');
   writeFileSync(`.local/${task.id}.txt`,result,{mode:0o600});
   return persist(task,state,{...p,stage:'result-saved',result,resultHash:taskHash(result)});
@@ -93,7 +99,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
    p={...p,observed};state=await persist(task,state,p);
    if(p.stage==='awaiting-escrow'){
     if(observed.onChainState!=='FundsLocked'||!confirmedState(observed,'FundsLocked'))return state;
-    if(Date.now()>=Number(p.payment.submitResultTime))throw new Error('Result deadline expired before model');
+    if(isLate(p))return failJob(task,state,p,lateFailure);
     state=await persist(task,state,{...p,stage:'model-pending'});
     return produceResult(task,state,{...p,stage:'model-pending'});
    }
@@ -102,7 +108,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
    return state;
   }
   if(p.stage==='result-saved'){
-   if(Date.now()>=Number(p.payment.submitResultTime))throw new Error('Result deadline expired before submit');
+   if(isLate(p))return failJob(task,state,p,lateFailure);
    state=await persist(task,state,{...p,stage:'submit-pending'});
    await mps('/api/v1/payment/submit-result',{network:'Preprod',blockchainIdentifier:p.payment.blockchainIdentifier,submitResultHash:p.resultHash});
    return persist(task,state,{...p,stage:'awaiting-result'});
@@ -112,12 +118,9 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
    const response=await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{status:'COMPLETED',comment:p.result});
    return persist(task,{...state,phase:'completed'},{...p,stage:'awaiting-withdrawal',completionEventId:response.data.id});
   }
-  if(p.stage==='job-failed')return p.ownerTold?state:tellOwner(task,state,p);
+  if(p.stage==='job-failed')return p.ownerTold||(p.tellTries??0)>=MAX_TELL_TRIES?state:tellOwner(task,state,p);
   // An answer that can resume keeps its own record of what it already did, so calling it again costs nothing twice.
-  if(p.stage==='model-pending'&&answer.canResume){
-   if(Date.now()>=Number(p.payment.submitResultTime))return failJob(task,state,p,'the result deadline passed before the work was done');
-   return produceResult(task,state,p);
-  }
+  if(p.stage==='model-pending'&&answer.canResume)return produceResult(task,state,p);
   if(p.stage.endsWith('-pending'))throw new Error(`Uncertain ${p.stage}. Inspect prior operation before recovery; automatic retry disabled.`);
   return state;
  }};

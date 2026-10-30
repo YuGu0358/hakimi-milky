@@ -99,7 +99,7 @@ export function createReviewer({decide = jevDecide()} = {}) {
     try {
       return decisionFrom(await decide({state: buildState({mandate, proposal, listings}), questions: QUESTIONS}));
     } catch (error) {
-      return {decision: 'escalate', reason: `The reviewer is unavailable: ${error.message}`};
+      return {decision: 'escalate', reason: `The reviewer is unavailable: ${error.message}`, unavailable: true};
     }
   };
 }

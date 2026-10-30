@@ -72,7 +72,9 @@ The Coworker in `frontdesk/` takes paid tasks through Sokosumi and needs `npm ci
 
 The table is CSV with the columns `sku,name,category,unit,price`, and may add `stock` and `note`. It can have at most 50 rows, and its categories and units have to fit `shared/fixtures/acceptance.json`. A table that could not pass those checks also gets the plain answer, so nobody is paid for a job that cannot succeed.
 
-Each paid task refills the orchestrator's limited key once, so the worker reads `ADMIN_KEY` from `frontdesk/.local/mps.env` for that one call. If the worker crashes during a job it picks the job up from the evidence and buys nothing twice. If nobody can finish the job, the owner is told, no result goes on chain and the seller cannot collect.
+Each paid task refills the orchestrator's limited key once, so the worker reads `ADMIN_KEY` from `frontdesk/.local/mps.env` for that one call. The reviewer needs `TYPESAFE_API_KEY` in `frontdesk/.env`.
+
+If the worker crashes during a job it picks the job up from the evidence, buys nothing twice and checks every delivered result against the chain again. A job that fails for a passing reason gets up to five tries, a minute apart. If the reviewer asks the owner to decide, if the tries run out or if the deadline passes, the owner is told, no result goes on chain and the seller cannot collect.
 
 ### Testing the guard
 

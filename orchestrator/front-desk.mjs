@@ -1,8 +1,9 @@
-import {checkTable} from './acceptance.mjs';
+import {checkCopy, checkTable} from './acceptance.mjs';
 import {assembleRun} from './assemble.mjs';
 import defaultAcceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 import {formatPrice} from '../shared/money.mjs';
-import {normalizeTable, parseCsvTable} from '../shared/table.mjs';
+import {jobPrompt, SUBTASKS} from '../shared/schemas.mjs';
+import {normalizeTable, parseCsvTable, plainCopy} from '../shared/table.mjs';
 
 // What the front desk does with a paid task. A table it can hand over goes to specialists through
 // the orchestrator, under the owner's mandate. Anything else gets the plain answer the starter gives.
@@ -10,6 +11,7 @@ import {normalizeTable, parseCsvTable} from '../shared/table.mjs';
 const MAX_ROWS = 50;
 const CORE_COLUMNS = Object.freeze(['sku', 'name', 'category', 'unit', 'price']);
 const RETRY_DELAY_MS = 60_000;
+const MAX_TRIES = 5;
 const MAX_REASON_CHARS = 1_000;
 const TX_URL = 'https://preprod.cardanoscan.io/transaction/';
 
@@ -32,6 +34,7 @@ class JobFailed extends Error {
 function headerIn(segment, columns) {
   const cells = segment
     .toLowerCase()
+    .replaceAll('"', '')
     .split(',')
     .map((cell) => cell.trim().split(/\s+/).at(-1));
   const lastOutside = cells.findLastIndex((cell, index) => !columns.includes(cell) || cells.slice(index + 1).includes(cell));
@@ -52,9 +55,19 @@ function parseRows(header, rows) {
   }
 }
 
-// Only a table an honest specialist could pass goes out, so nobody is paid for a job that cannot succeed.
-const couldPass = (rows, acceptance) =>
-  checkTable({spec: acceptance, inputTable: rows, resultText: JSON.stringify(normalizeTable(rows))}).length === 0;
+// Only a table honest specialists could pass goes out, so nobody is paid for a job that cannot succeed.
+const couldPass = (table, acceptance) =>
+  checkTable({spec: acceptance, inputTable: table, resultText: JSON.stringify(normalizeTable(table))}).length === 0 &&
+  checkCopy({spec: acceptance, inputTable: table, resultText: plainCopy({table, key: acceptance.key, acceptance})}).length === 0;
+
+function fitsOneJob(table, acceptance) {
+  try {
+    SUBTASKS.forEach((kind) => jobPrompt({kind, table, acceptance, key: acceptance.key}));
+    return true;
+  } catch {
+    return false; // Too long to send, or not valid as a job. Either way, the plain answer takes this task.
+  }
+}
 
 // Rows end at a line break, or at a bar when a form has put the whole table on one line.
 export function tableFromText(text, acceptance = defaultAcceptance) {
@@ -64,7 +77,7 @@ export function tableFromText(text, acceptance = defaultAcceptance) {
   const rows = rowsAfter(segments.slice(headerAt + 1));
   if (rows.length === 0 || rows.length > MAX_ROWS) return null;
   const table = parseRows(headerIn(segments[headerAt], acceptance.required_columns), rows);
-  return table && couldPass(table, acceptance) ? table : null;
+  return table && couldPass(table, acceptance) && fitsOneJob(table, acceptance) ? table : null;
 }
 
 const cell = (value) => String(value ?? '').replace(/\s+/g, ' ').replaceAll('|', '\\|').trim();
@@ -73,29 +86,45 @@ const tableRow = (cells) => `| ${cells.map(cell).join(' | ')} |`;
 const TABLE_FIELDS = Object.freeze(['sku', 'name', 'category', 'unit', 'price', 'stock', 'note', 'copy']);
 const TABLE_HEADER = Object.freeze(['SKU', 'Name', 'Category', 'Unit', 'Price', 'Stock', 'Note', 'Product text']);
 
-function outcomeOf(lines) {
-  const failed = lines.find(({step}) => step === 'acceptance.failed');
-  if (failed) return `Failed its check (${failed.reason}), so a refund was requested.`;
-  return lines.some(({step}) => step === 'acceptance.passed') ? 'Passed its check.' : 'Did not finish.';
+// Only our own codes and the SKUs in the owner's table. A seller chooses the keys it invents, and it has just been refused.
+function failureText({reason, detail}, ownerSkus) {
+  if (!detail?.failures) return reason;
+  return detail.failures
+    .map(({code, skus}) => {
+      const named = skus.filter((sku) => ownerSkus.has(sku));
+      return named.length > 0 ? `${code} (${named.join(', ')})` : code;
+    })
+    .join('; ');
 }
 
-function describeHire(reservation, lines, names) {
-  const own = lines.filter(({refs}) => refs?.blockchainIdentifier === reservation.refs.blockchainIdentifier);
+function outcomeOf(lines, ownerSkus) {
+  const failed = lines.find(({step}) => step === 'acceptance.failed');
+  if (!failed) return lines.some(({step}) => step === 'acceptance.passed') ? 'Passed its check.' : 'Did not finish.';
+  const refund = lines.some(({step}) => step === 'refund.pending') ? ' A refund was requested.' : '';
+  return `Failed its check (${cell(failureText(failed, ownerSkus))}).${refund}`;
+}
+
+const linesOfHire = (reservation, lines) => lines.filter(({refs}) => refs?.blockchainIdentifier === reservation.refs.blockchainIdentifier);
+
+function describeHire(reservation, lines, names, ownerSkus) {
+  const own = linesOfHire(reservation, lines);
   const links = own.flatMap(({step, refs}) => (TX_LABELS[step] && refs.txHash ? [`[${TX_LABELS[step]}](${TX_URL}${refs.txHash})`] : []));
   const name = names[reservation.terms.agentIdentifier] ?? reservation.terms.agentIdentifier;
   const price = formatPrice({unit: reservation.amount.unit, amount: reservation.amount.value});
-  return `- ${JOB_LABELS[reservation.subtask] ?? reservation.subtask}: ${name}, ${price}. ${outcomeOf(own)} ${[...new Set(links)].join(', ')}`.trim();
+  return `- ${JOB_LABELS[reservation.subtask] ?? reservation.subtask}: ${name}, ${price}. ${outcomeOf(own, ownerSkus)} ${[...new Set(links)].join(', ')}`.trim();
 }
 
-function hiresSection(lines, names) {
+function hiresSection(lines, names, ownerSkus) {
   const reservations = lines.filter(({step}) => step === 'purchase.reserved');
   if (reservations.length === 0) return [];
-  const ordered = reservations.reduce((sum, {amount}) => sum + BigInt(amount.value), 0n);
+  const ordered = reservations
+    .filter((reservation) => !linesOfHire(reservation, lines).some(({step}) => step === 'purchase.rejected'))
+    .reduce((sum, {amount}) => sum + BigInt(amount.value), 0n);
   return [
     '',
     '## Who did the work',
     '',
-    ...reservations.map((reservation) => describeHire(reservation, lines, names)),
+    ...reservations.map((reservation) => describeHire(reservation, lines, names, ownerSkus)),
     '',
     `Hires ordered: ${formatPrice({unit: reservations[0].amount.unit, amount: String(ordered)})}. Each one was checked against the mandate before any money moved.`,
   ];
@@ -103,6 +132,7 @@ function hiresSection(lines, names) {
 
 export function formatResult({deliverable, lines, names}) {
   const rows = JSON.parse(deliverable);
+  const ownerSkus = new Set(rows.map(({sku}) => String(sku)));
   return [
     '# Cleaned supplier table',
     '',
@@ -111,7 +141,7 @@ export function formatResult({deliverable, lines, names}) {
     ...rows.map((row) => tableRow(TABLE_FIELDS.map((field) => row[field]))),
     '',
     'Prices keep their value. Currency signs are dropped, because the checks compare numbers. Product texts are written from the table alone and are not verified.',
-    ...hiresSection(lines, names),
+    ...hiresSection(lines, names, ownerSkus),
   ].join('\n');
 }
 
@@ -124,6 +154,8 @@ export function createFrontDesk({
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   log = console.log,
 }) {
+  const triesUsed = new Map();
+
   async function hireFor({table, deadline, taskId}) {
     const parts = createParts();
     const {ledger, run} = assemble({...parts, taskId, table, acceptance, frontDeskDeadline: deadline});
@@ -136,17 +168,22 @@ export function createFrontDesk({
       () => log(`Front desk: ${taskId} has settled`),
       (error) => log(`Front desk: ${taskId} did not settle: ${error.message}`),
     );
-    if (!result.ok) throw new JobFailed(result.reason.slice(0, MAX_REASON_CHARS));
+    if (!result.ok) throw result.ownerMustDecide ? new JobFailed(result.reason.slice(0, MAX_REASON_CHARS)) : new Error(result.reason);
     const names = Object.fromEntries(parts.allowlist.map(({agentIdentifier, name}) => [agentIdentifier, name]));
     return formatResult({deliverable: result.deliverable, lines: ledger.lines(), names});
   }
 
+  // A seller restarting or a model timing out passes, so a job gets a few tries. The mandate and the
+  // evidence hold across them, so another try can only buy what the owner still allows.
   async function answer(input, journal, deadline, taskId) {
     try {
       const table = tableFromText(input, acceptance);
       return await (table ? hireFor({table, deadline, taskId}) : answerPlainly(input, journal, deadline));
     } catch (error) {
       if (error.isFinal) throw error;
+      const tries = (triesUsed.get(taskId) ?? 0) + 1;
+      triesUsed.set(taskId, tries);
+      if (tries >= MAX_TRIES) throw new JobFailed(error.message.slice(0, MAX_REASON_CHARS));
       log(`Front desk: ${taskId} will try again: ${error.message}`);
       await sleep(RETRY_DELAY_MS);
       throw error;

@@ -40,5 +40,13 @@ export function normalizeRow(row) {
 
 export const normalizeTable = (table) => table.map(normalizeRow);
 
+// The shortest copy the rules allow: what each text has to mention and nothing else. If this fails, every text would.
+export const plainCopy = ({table, key, acceptance}) =>
+  JSON.stringify(
+    Object.fromEntries(
+      table.map((row) => [String(row[key]).trim(), `${acceptance.copy.must_mention.map((field) => String(row[field]).trim()).join(', ')}.`]),
+    ),
+  );
+
 // Handles LF, CRLF and the byte order mark Excel adds, so a table saved on Windows parses the same way.
 export const parseCsvTable = (text) => parse(text, {columns: true, skip_empty_lines: true, bom: true});

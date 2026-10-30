@@ -1,6 +1,6 @@
 import {accept} from '../orchestrator/acceptance.mjs';
 import {resultHash} from '../shared/hash.mjs';
-import {normalizeTable} from '../shared/table.mjs';
+import {normalizeTable, plainCopy} from '../shared/table.mjs';
 import {stripFence} from '../shared/text.mjs';
 
 const MAX_COPY_ATTEMPTS = 3;
@@ -61,13 +61,6 @@ function selfCheck(job, nonce, text) {
   });
   return failures.map(describeFailure);
 }
-
-const plainCopy = ({table, key, acceptance}) =>
-  JSON.stringify(
-    Object.fromEntries(
-      table.map((row) => [String(row[key]).trim(), `${acceptance.copy.must_mention.map((field) => String(row[field]).trim()).join(', ')}.`]),
-    ),
-  );
 
 function copyWork({generate, log}) {
   async function draft(job, nonce, problems) {

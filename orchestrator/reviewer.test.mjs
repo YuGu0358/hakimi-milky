@@ -64,6 +64,13 @@ test('when Jev is unreachable it fails closed and asks the owner', async () => {
   });
   assert.equal(review.decision, 'escalate');
   assert.match(review.reason, /network down/);
+  assert.equal(review.unavailable, true);
+});
+
+test('a reviewer that answered unsure is not marked as unavailable', async () => {
+  const review = await reviewWith(async () => jevAnswer({verdict: 'veto', confidence: 0.79}));
+  assert.equal(review.decision, 'escalate');
+  assert.equal(review.unavailable, undefined);
 });
 
 test('a malformed answer is never read as an approval', async () => {

@@ -4,6 +4,7 @@ import {existsSync, mkdtempSync, readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {assembleRun} from './assemble.mjs';
+import {createLedger} from './ledger.mjs';
 import {MINUTE_MS} from '../shared/constants.mjs';
 import {createMockPayments} from '../payments/mock.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
@@ -11,7 +12,7 @@ import agents from '../shared/fixtures/agents.json' with {type: 'json'};
 import table from '../shared/fixtures/table.json' with {type: 'json'};
 
 const T0 = 1_793_340_000_000;
-const [standard, , copy] = agents;
+const [standard, cheap, copy] = agents;
 const AGENT_FOR = {normalize: standard, copy};
 
 const planner = {
@@ -30,14 +31,14 @@ const planner = {
 };
 
 // Time only moves when the code sleeps between polls, so a whole paid cycle runs instantly.
-function setup() {
+function setup({faults = {}} = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'assemble-'));
   let now = T0;
   const clock = () => now;
   const sleep = async (ms) => {
     now += ms;
   };
-  const payments = createMockPayments({clock});
+  const payments = createMockPayments({clock, faults});
   const assemble = (overrides = {}) =>
     assembleRun({
       taskId: 'task-1',
@@ -53,7 +54,7 @@ function setup() {
       pollMs: MINUTE_MS,
       ...overrides,
     });
-  return {directory, assemble, clock};
+  return {directory, assemble, clock, payments};
 }
 
 test('a run delivers and leaves its mandate and evidence under the task id', async () => {
@@ -80,6 +81,49 @@ test('a crash in one job is reported only after the other job has stopped', asyn
   await assert.rejects(run(), /the model is down/);
 
   assert.ok(ledger.lines().some(({step, subtask}) => step === 'acceptance.passed' && subtask === 'normalize'));
+});
+
+test('a restart does not take a delivered result on trust', async () => {
+  const {assemble, payments} = setup();
+  await assemble().run();
+  let tamperOnce = true;
+  const lying = {
+    ...payments,
+    getJobResult: async (listing, jobId) => {
+      const answer = await payments.getJobResult(listing, jobId);
+      if (!tamperOnce || listing.agentIdentifier !== standard.agentIdentifier) return answer;
+      tamperOnce = false;
+      const [first, ...rest] = JSON.parse(answer.result);
+      return {...answer, result: JSON.stringify([{...first, price: 999999}, ...rest.slice(0, -1)])};
+    },
+  };
+
+  const result = await assemble({payments: lying}).run();
+
+  assert.equal(result.ok, true, result.reason);
+  const rows = JSON.parse(result.deliverable);
+  assert.equal(rows.length, table.length);
+  assert.ok(rows.every(({price}) => price !== 999999));
+});
+
+test('a hire that failed its check and was collected anyway is not taken as done after a restart', async () => {
+  const {directory, assemble, clock} = setup({faults: {dropRows: 2, refuseRefund: true}});
+  const cheapFirst = {
+    plan: async ({subtask, feedback}) => {
+      const agent = subtask === 'copy' ? copy : feedback.length === 0 ? cheap : standard;
+      return {proposals: [{proposalId: `p-${subtask}-${feedback.length}`, subtask, agentIdentifier: agent.agentIdentifier, maxPrice: agent.price, reason: 'test'}], rejected: []};
+    },
+  };
+  const {ledger} = assemble({planner: cheapFirst});
+  await assemble({planner: cheapFirst}).run();
+  const failed = ledger.lines().find(({step}) => step === 'acceptance.failed');
+  const log = createLedger({path: join(directory, 'task-1-evidence.jsonl'), taskId: 'task-1', clock});
+  log.append({step: 'seller.withdrawn', proposalId: failed.proposalId, subtask: failed.subtask, refs: failed.refs, reason: 'Withdrawn'});
+
+  const result = await assemble({planner: cheapFirst}).run();
+
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(JSON.parse(result.deliverable).length, table.length);
 });
 
 test('a restart of the same task keeps the mandate and hires nobody new', async () => {

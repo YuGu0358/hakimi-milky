@@ -206,7 +206,7 @@ export function createHirer({
     const reviewed = await review({mandate, proposal, listings});
     record(base, 'review.checked', {decision: reviewed.decision, reason: reviewed.reason, detail: reviewed.detail});
     if (reviewed.decision === 'veto') return {status: 'vetoed', reason: reviewed.reason};
-    if (reviewed.decision !== 'allow') return {status: 'escalated', reason: reviewed.reason};
+    if (reviewed.decision !== 'allow') return {status: 'escalated', reason: reviewed.reason, unavailable: reviewed.unavailable === true};
     return startAndFollow(base, proposal, listing, job);
   }
 
@@ -248,10 +248,11 @@ export function createHirer({
       case 'funds_locked':
       case 'result_submitted':
         return followPurchase(ctx);
+      // Judged again against the chain: the text a seller sends now may not be the text that passed,
+      // and a seller also collects from a hire that failed its check if the refund never got through.
       case 'accepted':
-        return {status: 'accepted', subtask: ctx.subtask, result: await fetchResult(ctx), watch: watchSettlement(ctx)};
       case 'withdrawn':
-        return {status: 'accepted', subtask: ctx.subtask, result: await fetchResult(ctx), watch: Promise.resolve()};
+        return judge(ctx, await payments.getPurchase(ctx.quote.blockchainIdentifier));
       case 'acceptance_failed':
       case 'refund_pending':
       case 'refund_requested':

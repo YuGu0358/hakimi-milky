@@ -28,11 +28,11 @@ test('unconfirmed escrow does not invoke model',async()=>{
  const state=await adapter.advance(task,{input:'abc',paid:{stage:'awaiting-escrow',payment}});
  assert.equal(sends,0);assert.equal(state.paid.stage,'awaiting-escrow');
 });
-test('expired deadline prevents model after confirmed read',async()=>{
- let sends=0;const expired={...payment,submitResultTime:'1'};
- const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:async()=>{sends++;},mps:async()=>({...expired,onChainState:'FundsLocked',CurrentTransaction:{status:'Confirmed',newOnChainState:'FundsLocked'}})});
- await assert.rejects(()=>adapter.advance(task,{input:'abc',paid:{stage:'awaiting-escrow',payment:expired}}),/deadline expired/);
- assert.equal(sends,0);
+test('expired deadline prevents model after confirmed read and tells the owner',async()=>{
+ let sends=0;const expired={...payment,submitResultTime:'1'};const posts=[];
+ const adapter=await createPaidAdapter({target,core:{...core,post:async(_,body)=>{posts.push(body);return {data:{id:'event'}}}},registration,save:async()=>{},answer:async()=>{sends++;},mps:async()=>({...expired,onChainState:'FundsLocked',CurrentTransaction:{status:'Confirmed',newOnChainState:'FundsLocked'}})});
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'awaiting-escrow',payment:expired}});
+ assert.equal(state.paid.stage,'job-failed');assert.equal(sends,0);assert.equal(posts.length,1);
 });
 
 const resumable=(fn)=>Object.assign(fn,{canResume:true});
@@ -75,6 +75,30 @@ test('a resumed job past its deadline fails for good without calling the answer'
  const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async()=>{sends++;return 'late'})});
  const state=await adapter.advance(task,{input:'abc',paid:{stage:'model-pending',payment:{...payment,submitResultTime:'1'}}});
  assert.equal(state.paid.stage,'job-failed');assert.equal(sends,0);assert.equal(posts.length,1);
+});
+test('an answer that comes back after the deadline is not submitted',async()=>{
+ const {core,posts}=coreCounting();
+ const soon={...payment,submitResultTime:String(Date.now()+20)};
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async()=>{await new Promise(resolve=>setTimeout(resolve,40));return 'late'}),mps:async()=>{throw Error('unexpected payment call')}});
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'model-pending',payment:soon}});
+ assert.equal(state.paid.stage,'job-failed');assert.equal(state.paid.result,undefined);assert.equal(posts.length,1);
+});
+test('a saved result past its deadline is not submitted',async()=>{
+ const {core,posts}=coreCounting();let submits=0;
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async()=>'unused'),mps:async()=>{submits++;return {}}});
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'result-saved',result:'late',resultHash:taskHash('late'),payment:{...payment,submitResultTime:'1'}}});
+ assert.equal(state.paid.stage,'job-failed');assert.equal(submits,0);assert.equal(posts.length,1);
+});
+test('a message that keeps failing is tried a few times, then left alone',async()=>{
+ let posts=0;const saved=[];
+ const failing={...core,post:async()=>{posts++;throw Error('HTTP 400')}};
+ const adapter=await createPaidAdapter({target,core:failing,registration,save:async(_,s)=>{saved.push(s)},answer:resumable(async()=>{throw Error('unexpected')})});
+ let state={input:'abc',paid:{stage:'job-failed',failure:'gone',payment:running}};
+ for(let round=0;round<6;round++){
+  await adapter.advance(task,state).catch(()=>{});
+  state=saved.at(-1)??state;
+ }
+ assert.equal(posts,3);
 });
 test('confirmed history proves lock when CurrentTransaction is absent',()=>{
  assert.equal(confirmedState({CurrentTransaction:null,TransactionHistory:[{status:'Confirmed',newOnChainState:'FundsLocked'}]},'FundsLocked'),true);

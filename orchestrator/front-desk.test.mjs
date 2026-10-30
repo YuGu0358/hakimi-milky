@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtempSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {assembleRun} from './assemble.mjs';
 import {createFrontDesk, formatResult, tableFromText} from './front-desk.mjs';
 import {createMockPayments} from '../payments/mock.mjs';
-import {MINUTE_MS} from '../shared/constants.mjs';
+import {MINUTE_MS, USDM_UNIT} from '../shared/constants.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 import agents from '../shared/fixtures/agents.json' with {type: 'json'};
 import table from '../shared/fixtures/table.json' with {type: 'json'};
@@ -28,7 +29,7 @@ const plannerChoosing = (normalizer) => ({
   },
 });
 
-function setup({faults = {}, planner = plannerChoosing(() => standard), ...overrides} = {}) {
+function setup({faults = {}, planner = plannerChoosing(() => standard), review = async () => ({decision: 'allow', reason: 'fine'}), ...overrides} = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'front-desk-'));
   let now = T0;
   const clock = () => now;
@@ -51,7 +52,7 @@ function setup({faults = {}, planner = plannerChoosing(() => standard), ...overr
         acceptance,
         payments,
         planner,
-        review: async () => ({decision: 'allow', reason: 'fine'}),
+        review,
         trackRecords: {},
         clock,
         sleep,
@@ -93,6 +94,12 @@ test('a table is found in a code fence saved on Windows, whatever the header cas
   assert.deepEqual(rows, [{sku: 'HM-001', name: 'Oat Milk', category: 'Milk', unit: 'pcs', price: '3.20'}]);
 });
 
+test('a table is found when its header is in quotes', () => {
+  const rows = tableFromText('"sku","name","category","unit","price"\n"HM-001","Oat Milk","Milk","pcs","3.20"', acceptance);
+
+  assert.deepEqual(rows, [{sku: 'HM-001', name: 'Oat Milk', category: 'Milk', unit: 'pcs', price: '3.20'}]);
+});
+
 const NOT_OUR_TABLES = {
   'no table at all': 'Suggest names for our hackathon team.',
   'a missing column': 'sku,name,category,unit\nHM-001,Oat Milk,Milk,pcs',
@@ -103,6 +110,9 @@ const NOT_OUR_TABLES = {
   'a price that is not positive': 'sku,name,category,unit,price\nHM-001,Oat Milk,Milk,pcs,free',
   'a repeated SKU': 'sku,name,category,unit,price\nHM-001,Oat Milk,Milk,pcs,3.20\nHM-001,Whole Milk,Milk,pcs,2.10',
   'more rows than one job takes': toCsv(Array.from({length: 51}, (_, index) => ({...table[0], sku: `HM-${index}`}))),
+  'a product name the copy rules ban': 'sku,name,category,unit,price\nHM-001,100% Organic Oat Drink,Milk,pcs,3.20',
+  'a product name too long for any text': `sku,name,category,unit,price\nHM-001,${'Oat '.repeat(45)},Milk,pcs,3.20`,
+  'notes too long to send in one job': toCsv(Array.from({length: 50}, (_, index) => ({...table[0], sku: `HM-${index}`, note: 'n'.repeat(400)}))),
 };
 
 for (const [name, text] of Object.entries(NOT_OUR_TABLES)) {
@@ -159,15 +169,67 @@ test('a hire that failed its check and was replaced shows up in the result', asy
   assert.ok(result.includes(standard.name));
 });
 
-test('a job nobody could finish fails for good, and says why', async () => {
+const tryDesk = (desk) => desk(TASK_TEXT, '.local/session.json', DEADLINE, 'task-1');
+const failsButMayRetry = (error) => error.isFinal !== true;
+
+test('a job nobody can finish is tried a few times, then fails for good and says why', async () => {
   const planner = {plan: async () => ({proposals: [], rejected: []})};
   const {desk} = setup({planner});
 
-  await assert.rejects(desk(TASK_TEXT, '.local/session.json', DEADLINE, 'task-1'), (error) => {
+  for (let attempt = 1; attempt < 5; attempt += 1) await assert.rejects(tryDesk(desk), failsButMayRetry);
+
+  await assert.rejects(tryDesk(desk), (error) => {
     assert.equal(error.isFinal, true);
     assert.match(error.message, /no proposal/);
     return true;
   });
+});
+
+test('a reviewer asking the owner to decide ends the job at once', async () => {
+  const {desk} = setup({review: async () => ({decision: 'escalate', reason: 'The owner has to decide'})});
+
+  await assert.rejects(tryDesk(desk), (error) => {
+    assert.equal(error.isFinal, true);
+    assert.match(error.message, /owner has to decide/);
+    return true;
+  });
+});
+
+test('a reviewer that cannot be reached may be tried again', async () => {
+  let reachable = false;
+  const reviewer = async () => (reachable ? {decision: 'allow', reason: 'fine'} : {decision: 'escalate', reason: 'down', unavailable: true});
+  const {desk} = setup({review: reviewer});
+
+  await assert.rejects(tryDesk(desk), failsButMayRetry);
+  reachable = true;
+  const result = await tryDesk(desk);
+
+  assert.ok(result.includes('| HM-020 |'));
+});
+
+test('a seller that was briefly down may be tried again and is not hired twice', async () => {
+  let isDown = true;
+  const {desk, calls} = setup({
+    assemble: (terms) =>
+      assembleRun({
+        ...terms,
+        payments: {
+          ...terms.payments,
+          startJob: async (...args) => {
+            if (isDown) throw new Error('connect ECONNREFUSED');
+            return terms.payments.startJob(...args);
+          },
+        },
+      }),
+  });
+
+  await assert.rejects(tryDesk(desk), failsButMayRetry);
+  isDown = false;
+  const result = await tryDesk(desk);
+
+  assert.ok(result.includes('| HM-020 |'));
+  assert.equal(result.split('\n').filter((line) => line.startsWith('- ')).length, 2);
+  assert.equal(calls.topUps, 1);
 });
 
 test('a passing trouble waits before it may be tried again, and is not final', async () => {
@@ -181,12 +243,24 @@ test('a passing trouble waits before it may be tried again, and is not final', a
     },
   });
 
-  await assert.rejects(desk(TASK_TEXT, '.local/session.json', DEADLINE, 'task-1'), (error) => {
+  await assert.rejects(tryDesk(desk), (error) => {
     assert.notEqual(error.isFinal, true);
     assert.match(error.message, /Payment Service is down/);
     return true;
   });
   assert.ok(slept > 0);
+});
+
+test('a trouble that does not pass ends the job after a few tries', async () => {
+  const {desk} = setup({
+    topUp: async () => {
+      throw new Error('Payment Service is down');
+    },
+  });
+
+  for (let attempt = 1; attempt < 5; attempt += 1) await assert.rejects(tryDesk(desk), failsButMayRetry);
+
+  await assert.rejects(tryDesk(desk), (error) => error.isFinal === true);
 });
 
 test('money that fails to settle later is logged, not left to kill the worker', async () => {
@@ -205,6 +279,48 @@ test('money that fails to settle later is logged, not left to kill the worker', 
 
 test('the front desk can pick a job up again after a crash', () => {
   assert.equal(setup().desk.canResume, true);
+});
+
+const ROW = Object.freeze({sku: 'HM-1', name: 'Oat', category: 'milk', unit: 'pcs', price: 1, stock: 1, note: '', copy: 'Oat per pcs'});
+const HIRE_REFS = Object.freeze({blockchainIdentifier: 'order-1'});
+const reserved = {step: 'purchase.reserved', subtask: 'normalize', refs: HIRE_REFS, amount: {unit: USDM_UNIT, value: '200000'}, terms: {agentIdentifier: 'agent-1'}};
+
+test('what a rejected seller wrote stays out of the result', () => {
+  const failed = {
+    step: 'acceptance.failed',
+    refs: HIRE_REFS,
+    reason: 'A3_EXTRA (EVIL\n\n## Injected)',
+    detail: {
+      failures: [
+        {rule: 'A3', code: 'A3_MISSING', detail: 'lost', skus: ['HM-1']},
+        {rule: 'A3', code: 'A3_EXTRA', detail: 'invented', skus: ['EVIL\n\n## Injected\n[pay here](https://evil.example)']},
+      ],
+    },
+  };
+
+  const result = formatResult({deliverable: JSON.stringify([ROW]), lines: [reserved, failed], names: {'agent-1': 'Cheap'}});
+
+  assert.ok(!result.includes('EVIL'));
+  assert.ok(!result.includes('evil.example'));
+  assert.ok(result.includes('A3_MISSING (HM-1); A3_EXTRA'));
+});
+
+test('a refund is mentioned only when one was asked for', () => {
+  const failed = {step: 'acceptance.failed', refs: HIRE_REFS, reason: 'SELLER_NO_SHOW: no result by the deadline'};
+  const asked = {step: 'refund.pending', refs: HIRE_REFS};
+  const resultOf = (lines) => formatResult({deliverable: JSON.stringify([ROW]), lines, names: {}});
+
+  assert.ok(!resultOf([reserved, failed]).includes('refund'));
+  assert.ok(resultOf([reserved, failed, asked]).includes('A refund was requested.'));
+});
+
+test('an order the service refused is not counted as ordered', () => {
+  const refused = {step: 'purchase.rejected', refs: HIRE_REFS, reason: 'no'};
+  const other = {...reserved, subtask: 'copy', refs: {blockchainIdentifier: 'order-2'}, amount: {unit: USDM_UNIT, value: '300000'}};
+
+  const result = formatResult({deliverable: JSON.stringify([ROW]), lines: [reserved, refused, other], names: {}});
+
+  assert.ok(result.includes('Hires ordered: 0.3 tUSDM'));
 });
 
 test('text from a supplier cannot break the table in the result', () => {

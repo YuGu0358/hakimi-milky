@@ -45,6 +45,14 @@ function withTrackRecord(listing, chainRecords, localRecords) {
   };
 }
 
+// Every job stops before a crash is reported, so a caller that tries again never runs beside it.
+async function allStopped(jobs) {
+  const stopped = await Promise.allSettled(jobs);
+  const crash = stopped.find(({status}) => status === 'rejected');
+  if (crash) throw crash.reason;
+  return stopped.map(({value}) => value);
+}
+
 export async function orchestrate({
   table,
   acceptance,
@@ -73,7 +81,7 @@ export async function orchestrate({
 
   // Pick up whatever a previous process left behind, the nearest unlock first.
   const earlier = Object.values(ledger.state().purchases).sort((a, b) => a.terms.unlockTime - b.terms.unlockTime);
-  const resumed = await Promise.all(
+  const resumed = await allStopped(
     earlier.map(async (purchase) => ({
       subtask: purchase.subtask,
       outcome: await hirer.resume(purchase, {job: jobs[purchase.subtask], listings: registered}),
@@ -116,17 +124,15 @@ export async function orchestrate({
     return {final: {status: 'gave_up', reason: `${subtask}: ${feedback.join(' | ') || 'no proposal'}`}, outcomes};
   }
 
-  // Every job stops before a crash is reported, so a caller that tries again never runs beside it.
-  const stopped = await Promise.allSettled(SUBTASKS.map(runSubtask));
-  const crash = stopped.find(({status}) => status === 'rejected');
-  if (crash) throw crash.reason;
-  const results = stopped.map(({value}) => value);
+  const results = await allStopped(SUBTASKS.map(runSubtask));
   const settled =Promise.all(results.flatMap(({outcomes}) => watchesOf(outcomes))).then(() => undefined);
   const notDone = results.filter(({final}) => final.status !== 'accepted');
   if (notDone.length > 0) {
     const reason = notDone.map(({final}) => describe(final)).join(' || ');
     ledger.append({step: 'run.failed', reason});
-    return {ok: false, reason, settled};
+    // A reviewer that answered and wants the owner to decide. Trying again would only ask it until it agrees.
+    const ownerMustDecide = notDone.some(({final}) => final.status === 'escalated' && !final.unavailable);
+    return {ok: false, reason, settled, ownerMustDecide};
   }
   const [normalize, copy] = SUBTASKS.map((subtask) => results[SUBTASKS.indexOf(subtask)].final.result);
   const deliverable = mergeDeliverable(normalize, copy);

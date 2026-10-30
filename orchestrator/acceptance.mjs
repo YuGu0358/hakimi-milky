@@ -92,7 +92,7 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const containsPhrase = (text, phrase) =>
   new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(phrase.trim())}(?![\\p{L}\\p{N}])`, 'iu').test(text);
 
-function checkCopy({spec, inputTable, resultText}) {
+export function checkCopy({spec, inputTable, resultText}) {
   const {value, error} = parseJson(resultText);
   if (error || !isPlainObject(value)) {
     return [failure('A6', 'A6_NOT_AN_OBJECT', error ?? 'The result is not a JSON object of copy per key')];
