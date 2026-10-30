@@ -48,6 +48,24 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
   return data.data;
  }
  async function persist(task,state,paid){const next={...state,paid};await save(task.id,next);return next;}
+ async function tellOwner(task,state,p){
+  await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{comment:`This job could not be finished (${p.failure}). No result was submitted, so the seller cannot collect this payment.`});
+  return persist(task,state,{...p,ownerTold:true});
+ }
+ async function failJob(task,state,p,failure){
+  const next={...p,stage:'job-failed',failure};
+  return tellOwner(task,await persist(task,state,next),next);
+ }
+ async function produceResult(task,state,p){
+  const deadline=Number(p.payment.submitResultTime);
+  if(Date.now()>=deadline)throw new Error('Result deadline expired before model send');
+  let result;
+  try{result=await answer(state.input,`.local/${task.id}-session.json`,deadline,task.id);}
+  catch(error){if(error.isFinal)return failJob(task,state,p,error.message);throw error;}
+  if(typeof result!=='string'||!result.trim())throw new Error('Model did not return a result');
+  writeFileSync(`.local/${task.id}.txt`,result,{mode:0o600});
+  return persist(task,state,{...p,stage:'result-saved',result,resultHash:taskHash(result)});
+ }
  return {async advance(task,state){
   assertTaskTarget(task,target);
   await verifyRuntimeTask(await getCore(),task.id,target);
@@ -77,11 +95,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
     if(observed.onChainState!=='FundsLocked'||!confirmedState(observed,'FundsLocked'))return state;
     if(Date.now()>=Number(p.payment.submitResultTime))throw new Error('Result deadline expired before model');
     state=await persist(task,state,{...p,stage:'model-pending'});
-    if(Date.now()>=Number(p.payment.submitResultTime))throw new Error('Result deadline expired before model send');
-    const result=await answer(state.input,`.local/${task.id}-session.json`,Number(p.payment.submitResultTime));
-    if(typeof result!=='string'||!result.trim())throw new Error('Model did not return a result');
-    writeFileSync(`.local/${task.id}.txt`,result,{mode:0o600});
-    return persist(task,state,{...p,stage:'result-saved',result,resultHash:taskHash(result)});
+    return produceResult(task,state,{...p,stage:'model-pending'});
    }
    if(p.stage==='awaiting-result'&&observed.resultHash===p.resultHash&&confirmedState(observed,'ResultSubmitted')&&observed.onChainState==='ResultSubmitted')return persist(task,state,{...p,stage:'complete-ready'});
    if(p.stage==='awaiting-withdrawal'&&['Withdrawn','DisputedWithdrawn'].includes(observed.onChainState)){const evidence=await verifySettlement({core:await verifyRuntimeTask(await getCore(),task.id,target),taskId:task.id,payment:observed,sellerAddress:registration().registration?.SmartContractWallet?.walletAddress,unit:USDM});return persist(task,state,{...p,stage:evidence.verified?'settled':'awaiting-withdrawal',settlement:evidence});}
@@ -97,6 +111,12 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
    state=await persist(task,state,{...p,stage:'complete-pending'});
    const response=await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{status:'COMPLETED',comment:p.result});
    return persist(task,{...state,phase:'completed'},{...p,stage:'awaiting-withdrawal',completionEventId:response.data.id});
+  }
+  if(p.stage==='job-failed')return p.ownerTold?state:tellOwner(task,state,p);
+  // An answer that can resume keeps its own record of what it already did, so calling it again costs nothing twice.
+  if(p.stage==='model-pending'&&answer.canResume){
+   if(Date.now()>=Number(p.payment.submitResultTime))return failJob(task,state,p,'the result deadline passed before the work was done');
+   return produceResult(task,state,p);
   }
   if(p.stage.endsWith('-pending'))throw new Error(`Uncertain ${p.stage}. Inspect prior operation before recovery; automatic retry disabled.`);
   return state;

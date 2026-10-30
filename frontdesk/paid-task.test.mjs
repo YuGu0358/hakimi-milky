@@ -35,6 +35,47 @@ test('expired deadline prevents model after confirmed read',async()=>{
  assert.equal(sends,0);
 });
 
+const resumable=(fn)=>Object.assign(fn,{canResume:true});
+const finalError=(message)=>Object.assign(new Error(message),{isFinal:true});
+const running={...payment,submitResultTime:String(Date.now()+60000)};
+const coreCounting=()=>{const posts=[];return {posts,core:{...core,post:async(_,body)=>{posts.push(body);return {data:{id:'event'}}}}}};
+test('a resumable answer is called again after a crash in model-pending',async()=>{
+ let sends=0;const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async(_,__,deadline,taskId)=>{sends++;assert.equal(taskId,'task');assert.equal(deadline,Number(running.submitResultTime));return 'done'})});
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'model-pending',payment:running}});
+ assert.equal(sends,1);assert.equal(state.paid.stage,'result-saved');assert.equal(state.paid.resultHash,taskHash('done'));
+});
+test('an answer that cannot resume stays uncertain in model-pending',async()=>{
+ let sends=0;const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:async()=>{sends++;return 'done'}});
+ await assert.rejects(()=>adapter.advance(task,{input:'abc',paid:{stage:'model-pending',payment:running}}),/automatic retry disabled/);
+ assert.equal(sends,0);
+});
+test('a final failure submits nothing, tells the owner once and stops',async()=>{
+ const {core,posts}=coreCounting();let sends=0;
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async()=>{sends++;throw finalError('nobody could do it.')}),mps:async()=>{throw Error('unexpected payment call')}});
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'model-pending',payment:running}});
+ assert.equal(state.paid.stage,'job-failed');assert.equal(state.paid.resultHash,undefined);
+ assert.equal(posts.length,1);assert.match(posts[0].comment,/nobody could do it/);assert.equal(posts[0].status,undefined);
+ const again=await adapter.advance(task,state);
+ assert.equal(again,state);assert.equal(sends,1);assert.equal(posts.length,1);
+});
+test('a failed job whose message did not get through tries again',async()=>{
+ const {core,posts}=coreCounting();
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async()=>{throw Error('unexpected')})});
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'job-failed',failure:'gone.',payment:running}});
+ assert.equal(posts.length,1);assert.equal(state.paid.ownerTold,true);
+});
+test('a trouble that may pass leaves the task where it can be tried again',async()=>{
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async()=>{throw Error('service is down')})});
+ const state={input:'abc',paid:{stage:'model-pending',payment:running}};
+ await assert.rejects(()=>adapter.advance(task,state),/service is down/);
+ assert.equal(state.paid.stage,'model-pending');
+});
+test('a resumed job past its deadline fails for good without calling the answer',async()=>{
+ const {core,posts}=coreCounting();let sends=0;
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async()=>{sends++;return 'late'})});
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'model-pending',payment:{...payment,submitResultTime:'1'}}});
+ assert.equal(state.paid.stage,'job-failed');assert.equal(sends,0);assert.equal(posts.length,1);
+});
 test('confirmed history proves lock when CurrentTransaction is absent',()=>{
  assert.equal(confirmedState({CurrentTransaction:null,TransactionHistory:[{status:'Confirmed',newOnChainState:'FundsLocked'}]},'FundsLocked'),true);
  assert.equal(confirmedState({CurrentTransaction:null,TransactionHistory:[{status:'Confirmed',newOnChainState:'ResultSubmitted'}]},'FundsLocked'),false);

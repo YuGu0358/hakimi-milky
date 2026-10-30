@@ -89,13 +89,18 @@ export function createBuyerKeys({request, statePath, tokenPath}) {
   return {ensure, topUp};
 }
 
-async function main([command = 'create']) {
-  if (!process.env.ADMIN_KEY) throw new Error('Set ADMIN_KEY');
-  const keys = createBuyerKeys({
-    request: createMps({baseUrl: process.env.MPS_URL, token: process.env.ADMIN_KEY}),
+const savedKeys = ({baseUrl, adminKey}) =>
+  createBuyerKeys({
+    request: createMps({baseUrl, token: adminKey}),
     statePath: BUYER_STATE_PATH,
     tokenPath: BUYER_TOKEN_PATH,
   });
+
+export const refillBuyerKey = (connection) => savedKeys(connection).topUp();
+
+async function main([command = 'create']) {
+  if (!process.env.ADMIN_KEY) throw new Error('Set ADMIN_KEY');
+  const keys = savedKeys({baseUrl: process.env.MPS_URL, adminKey: process.env.ADMIN_KEY});
   if (command === 'create') {
     const {created, id} = await keys.ensure();
     console.log(created ? `Buyer key created: ${id}` : `Buyer key already saved: ${id}`);

@@ -1,10 +1,14 @@
 import {runCommand} from './sokosumi-cli.mjs';
 import {existsSync,readFileSync,writeFileSync} from 'node:fs';
+import {parseEnv} from 'node:util';
 import {acquireWorkerLock} from './worker-lock.mjs';
 import {answer,client} from './client.mjs';
 import {reply} from './comments.mjs';
 import {createPaidAdapter,isPaidReady} from './paid-task.mjs';
 import {taskTarget,isTaskForTarget} from './task-target.mjs';
+import {createFrontDesk} from '../orchestrator/front-desk.mjs';
+import {createLiveParts} from '../orchestrator/live-parts.mjs';
+import {refillBuyerKey} from '../payments/buyer-key.mjs';
 const target=taskTarget();
 const id=target.coworkerId;
 const releaseLock=acquireWorkerLock();
@@ -12,7 +16,10 @@ process.once('exit',releaseLock);
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{releaseLock();process.exit(0)});
 function cli(args){return JSON.parse(runCommand('sokosumi',['--preprod',...args,'--json'],{encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024}));}
 await client.health();
-const paid=await createPaidAdapter({target,answer,save:async(taskId,state)=>writeFileSync(`.local/${taskId}.json`,JSON.stringify(state),{mode:0o600})});
+// The owner's 1 test USDM pays for the task, so each paid task refills the orchestrator's limited key once.
+const topUp=()=>refillBuyerKey({baseUrl:process.env.MPS_URL,adminKey:parseEnv(readFileSync('.local/mps.env','utf8')).ADMIN_KEY});
+const desk=createFrontDesk({answerPlainly:answer,createParts:createLiveParts,topUp});
+const paid=await createPaidAdapter({target,answer:desk,save:async(taskId,state)=>writeFileSync(`.local/${taskId}.json`,JSON.stringify(state),{mode:0o600})});
 console.log('Continuous worker running',process.pid);
 while(true){
  try{

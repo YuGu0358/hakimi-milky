@@ -116,8 +116,12 @@ export async function orchestrate({
     return {final: {status: 'gave_up', reason: `${subtask}: ${feedback.join(' | ') || 'no proposal'}`}, outcomes};
   }
 
-  const results = await Promise.all(SUBTASKS.map(runSubtask));
-  const settled = Promise.all(results.flatMap(({outcomes}) => watchesOf(outcomes))).then(() => undefined);
+  // Every job stops before a crash is reported, so a caller that tries again never runs beside it.
+  const stopped = await Promise.allSettled(SUBTASKS.map(runSubtask));
+  const crash = stopped.find(({status}) => status === 'rejected');
+  if (crash) throw crash.reason;
+  const results = stopped.map(({value}) => value);
+  const settled =Promise.all(results.flatMap(({outcomes}) => watchesOf(outcomes))).then(() => undefined);
   const notDone = results.filter(({final}) => final.status !== 'accepted');
   if (notDone.length > 0) {
     const reason = notDone.map(({final}) => describe(final)).join(' || ');

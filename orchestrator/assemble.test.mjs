@@ -67,6 +67,21 @@ test('a run delivers and leaves its mandate and evidence under the task id', asy
   assert.equal(existsSync(join(directory, 'task-1-evidence.jsonl')), true);
 });
 
+test('a crash in one job is reported only after the other job has stopped', async () => {
+  const {assemble} = setup();
+  const crashing = {
+    plan: async (request) => {
+      if (request.subtask === 'copy') throw new Error('the model is down');
+      return planner.plan(request);
+    },
+  };
+  const {ledger, run} = assemble({planner: crashing});
+
+  await assert.rejects(run(), /the model is down/);
+
+  assert.ok(ledger.lines().some(({step, subtask}) => step === 'acceptance.passed' && subtask === 'normalize'));
+});
+
 test('a restart of the same task keeps the mandate and hires nobody new', async () => {
   const {directory, assemble} = setup();
   const first = await assemble().run();

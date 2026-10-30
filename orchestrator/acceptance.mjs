@@ -73,7 +73,7 @@ function checkValues(rows, spec) {
   ];
 }
 
-function checkTable({spec, inputTable, resultText}) {
+export function checkTable({spec, inputTable, resultText}) {
   const {value, error} = parseJson(resultText);
   if (error || !Array.isArray(value) || !value.every(isPlainObject)) {
     return [failure('A2', 'A2_NOT_A_TABLE', error ?? 'The result is not a JSON array of rows')];
