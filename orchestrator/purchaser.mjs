@@ -80,7 +80,7 @@ export function createPurchaser({mandate, ledger, purchase, getPurchase, clock =
 
   async function buyLocked(ctx) {
     const {quote, price, prompt, nonce, subtask} = ctx;
-    const decision = guard({mandate, ledger: ledger.state(), quote, price, prompt, nonce, subtask, expectedAgent: ctx.listing?.agentIdentifier, now: clock()});
+    const decision = guard({mandate, ledger: ledger.state(), quote, price, prompt, nonce, subtask, expectedAgent: ctx.listing?.agentIdentifier, expectedSourceIndex: ctx.listing?.supportedPaymentSourceIndex, now: clock()});
     record(ctx, 'guard.checked', {
       decision: decision.ok ? 'allow' : 'deny',
       rule: decision.rule,

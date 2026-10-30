@@ -80,6 +80,7 @@ const refusals = [
   ['a format we cannot read', {metadata: {name: ['x']}}, 'cannot_read'],
   ['a dynamic price', {metadata: metadata({pricing: {pricingType: 'Dynamic'}})}, 'not_fixed_price'],
   ['another currency', {metadata: metadata({pricing: {pricingType: 'Fixed', fixed: [{asset: 'lovelace', amount: 1}]}})}, 'wrong_currency'],
+  ['a unit named like a built-in', {metadata: metadata({pricing: {pricingType: 'Fixed', fixed: [{asset: 'constructor', amount: 1}]}})}, 'wrong_currency'],
   ['a price above one hire', {metadata: metadata({pricing: {pricingType: 'Fixed', fixed: [{asset: USDM_UNIT, amount: 400001}]}})}, 'over_price'],
   ['a private address', {metadata: metadata({url: 'https://169.254.169.254/x'})}, 'not_public'],
   ['plain http', {metadata: metadata({url: 'http://agent.masumi.network'})}, 'not_public'],

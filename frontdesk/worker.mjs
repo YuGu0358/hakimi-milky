@@ -18,7 +18,7 @@ function cli(args){return JSON.parse(runCommand('sokosumi',['--preprod',...args,
 await client.health();
 // The owner's 1 test USDM pays for the task, so each paid task refills the orchestrator's limited key once.
 const topUp=()=>refillBuyerKey({baseUrl:process.env.MPS_URL,adminKey:parseEnv(readFileSync('.local/mps.env','utf8')).ADMIN_KEY});
-const desk=createFrontDesk({answerPlainly:answer,createParts:createLiveParts,topUp});
+const desk=createFrontDesk({answerPlainly:answer,createParts:()=>createLiveParts(),topUp});
 const paid=await createPaidAdapter({target,answer:desk,save:async(taskId,state)=>writeFileSync(`.local/${taskId}.json`,JSON.stringify(state),{mode:0o600})});
 console.log('Continuous worker running',process.pid);
 while(true){

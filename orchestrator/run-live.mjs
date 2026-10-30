@@ -21,7 +21,7 @@ async function main([name = 'c1', givenTaskId]) {
   process.once('SIGTERM', () => process.exit(143));
   console.log(`Task ${taskId}. To resume after a crash: npm run live -- ${name} ${taskId}`);
 
-  const parts = createLiveParts();
+  const parts = createLiveParts({useOwnerPins: true});
   const {ledger, run} = assembleRun({
     ...parts,
     taskId,

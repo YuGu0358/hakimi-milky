@@ -83,7 +83,7 @@ export function checkTable({spec, inputTable, resultText}) {
   ];
 }
 
-const MARKUP = /[<>]|\]\(|https?:\/\/|www\./i;
+const MARKUP = /[<>@]|\]\(|https?:\/\/|www\.|\b[\w-]+\.(com|net|org|io|ai|co|de|app|xyz)\b/i;
 
 // The owner's own values may hold anything. Only what the seller added around them counts as markup.
 const hasMarkup = (text, row, fields) => MARKUP.test(fields.reduce((rest, field) => rest.replaceAll(String(row[field] ?? '').trim(), ''), text));

@@ -82,7 +82,7 @@ export function tableFromText(text, acceptance = defaultAcceptance) {
 }
 
 // The owner may paste this into a shop, so nothing in it can act as a link or a tag.
-const cell = (value) => String(value ?? '').replace(/\s+/g, ' ').replace(/[|<>[\]]/g, '\\$&').trim();
+const cell = (value) => String(value ?? '').replace(/\s+/g, ' ').replace(/[\\|<>[\]]/g, '\\$&').trim();
 const tableRow = (cells) => `| ${cells.map(cell).join(' | ')} |`;
 
 const TABLE_FIELDS = Object.freeze(['sku', 'name', 'category', 'unit', 'price', 'stock', 'note', 'copy']);

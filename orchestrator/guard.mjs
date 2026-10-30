@@ -1,3 +1,4 @@
+import {PAYMENT_SOURCE_TYPE} from '../shared/constants.mjs';
 import {inputHash} from '../shared/hash.mjs';
 
 // The guard is deterministic code with no model in it. It answers one question:
@@ -8,6 +9,7 @@ const allow = () => ({ok: true});
 const deny = (rule, code, reason) => ({ok: false, rule, code, reason});
 
 const MAX_DISPUTE_PAST_LOCK_MS = 30 * 60_000;
+const MIN_REFUND_WINDOW_MS = 15 * 60_000; // from the result to the unlock, and from the unlock to the dispute time
 
 const findEntry = (mandate, agentIdentifier) =>
   mandate.allowlist.find((entry) => entry.agentIdentifier === agentIdentifier);
@@ -33,6 +35,14 @@ function checkQuoteAgent({quote, expectedAgent}) {
   return expectedAgent && quote.agentIdentifier === expectedAgent
     ? allow()
     : deny('G1', 'G1_QUOTE_AGENT_MISMATCH', 'The quote names a different agent than the one proposed');
+}
+
+// The Payment Service would refuse these too, but only after the seller already has the table.
+function checkPaymentSource({quote, expectedSourceIndex}) {
+  if (quote.paymentSourceType !== PAYMENT_SOURCE_TYPE) return deny('G1', 'G1_WRONG_PAYMENT_SOURCE', 'The quote names another payment source type');
+  return expectedSourceIndex === undefined || quote.supportedPaymentSourceIndex === expectedSourceIndex
+    ? allow()
+    : deny('G1', 'G1_WRONG_PAYMENT_SOURCE', 'The quote names another payment source than the listing');
 }
 
 function checkSellerKey({mandate, quote}) {
@@ -84,6 +94,9 @@ function checkTimes({mandate, quote, now}) {
   if (unlockTime > mandate.lockUntil) {
     return deny('G4', 'G4_LOCKED_TOO_LONG', `Unlock time ${unlockTime} is after the lock limit ${mandate.lockUntil}`);
   }
+  if (unlockTime - submitResultTime < MIN_REFUND_WINDOW_MS || externalDisputeUnlockTime - unlockTime < MIN_REFUND_WINDOW_MS) {
+    return deny('G4', 'G4_NO_REFUND_WINDOW', 'The quote leaves too little time to ask for a refund');
+  }
   // A refund that a seller refuses stays frozen until this time, so it has an upper limit too.
   if (externalDisputeUnlockTime > mandate.lockUntil + MAX_DISPUTE_PAST_LOCK_MS) {
     return deny('G4', 'G4_DISPUTE_TOO_LATE', `Dispute time ${externalDisputeUnlockTime} is too far past the lock limit ${mandate.lockUntil}`);
@@ -128,6 +141,7 @@ export function guard(ctx) {
   const checks = [
     () => checkAllowlisted(ctx.mandate, ctx.quote.agentIdentifier),
     () => checkQuoteAgent(ctx),
+    () => checkPaymentSource(ctx),
     () => checkSellerKey(ctx),
     ...(retry ? [] : [() => checkSpend(ctx)]),
     () => checkInput(ctx),

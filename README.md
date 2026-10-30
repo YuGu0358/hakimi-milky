@@ -50,6 +50,25 @@ Models can only tighten the leash, never loosen it.
 | fast-check | 4.10.2 | MIT | Generated guard test cases |
 | cross-spawn | 7.0.6 | MIT | Calling the Sokosumi CLI on Windows, where it is a `.cmd` file |
 
+## Who can be hired
+
+`npm run registry` reads every live agent in both Preprod registries from the chain. It calls no agent and buys nothing. The first read takes minutes, and after that only new agents are read. On 30 October:
+
+| Registry | Minted | Live | Fixed price | Also a public address |
+| --- | --- | --- | --- | --- |
+| Current (`67ab0c92…`), which our Payment Service pays through | 1043 | 355 | 189 | 140 |
+| Older (`7e8bdaf2…`), another escrow contract, not connected | 2803 | 1154 | 1019 | 762 |
+
+Of the 140, 60 are priced in tUSDM and 3 of those fit the 0.4 tUSDM limit for one hire. "Public" is judged from the text of the address only. The file `.local/registry-catalog.json` lists every agent and why it can or cannot be hired. Names and addresses are text written by strangers, so the command does not print them.
+
+The planner still sees only the owner's list, however many agents exist. A run reads exactly the agents on that list, however long ago they registered, and names in its evidence any it cannot hire. To add one:
+
+```
+npm run registry:allow -- <agentIdentifier> <normalize|copy> --share-table [--name <name>] [--dry-run]
+```
+
+It refuses agents on the older registry, agents without a fixed price in the budget's currency or above the limit, addresses that are not public https, and any agent held by a script. It reads the seller's key from the address holding the agent and pins it. `--share-table` is required because the owner's table goes to a seller before any payment. The model reads the name the owner gave, not the one the agent registered. This path has unit tests and dry runs. It has not hired a stranger, and an ordinary MIP-003 seller would still fail at the quote.
+
 ## What has run
 
 Every check here except C7 ran on Preprod with test tokens, and every agent we hired is our own. C7 needs no chain. [`evidence/index.html`](evidence/index.html) shows the main runs step by step, built from the raw records in `evidence/runs/`. GitHub shows that file as source, so clone the repo and open it in a browser.
@@ -343,11 +362,12 @@ Run it from a shell where Node 24 is on the PATH. It expects the Coworker in `fr
 
 ### Payment Service patches
 
-Run the Payment Service with both of these. Neither changes any contract code. Run the commands from this repo's folder. They expect the two folders side by side, named `hakimi-milky` and `masumi-payment-service`.
+Run the Payment Service with all three of these. None of them changes any contract code. Run the commands from this repo's folder. They expect the two folders side by side, named `hakimi-milky` and `masumi-payment-service`.
 
 ```
 git -C ../masumi-payment-service apply ../hakimi-milky/patches/masumi-payment-service-refund-result-hash.patch
 git -C ../masumi-payment-service apply ../hakimi-milky/patches/masumi-payment-service-keep-running.patch
+git -C ../masumi-payment-service apply ../hakimi-milky/patches/masumi-payment-service-loopback-and-quiet-log.patch
 ```
 
 The first one is needed or a refund for a purchase that already has a result is never collected. When a seller authorizes a refund, the contract empties the result hash. The service stores `new hash ?? old hash` on the purchase, so the empty value is overwritten with the old one, and its job that collects refunds only picks purchases with no hash. The patch keeps the empty value.
@@ -358,6 +378,12 @@ The second one keeps the service running. got 11, which the Blockfrost client us
 
 CI runs every test on macOS and Windows, including starting a specialist agent as its own process. Every Preprod run above was on macOS. The Payment Service has not been installed on Windows, so the paid flow has not run there.
 
+## What the money path assumes
+
+A deadline only decides after the Payment Service has answered for three minutes without a gap, so a failed read or a stale answer after a sleep cannot make an honest seller a no-show. A service that stays silent stops the run without a verdict. Before reporting a refund as too late, it reads the chain first. Tests cover these with simulated reads. On Preprod we have only seen failed reads, not stale answers.
+
+A seller can change no field of the owner's row: acceptance compares each one with the owner's row after normalizing it. Copy may hold no links or markup beyond the owner's own values. A quote must name the proposed agent, and its dispute time can be at most 30 minutes past the lock limit. An answer from a seller over 1 MiB is refused. Models and the owner get our own failure codes and the SKUs from the owner's table, never a seller's text. `shared/architecture.test.mjs` holds the import rules between folders, with five known exceptions listed in it.
+
 ## Demo limits
 
 - All the agents we hire are our own. A scan of the current Preprod registry, the one our Payment Service pays through (policy `67ab0c92…`), on 30 October found 348 live agents, 4 of them ours. Of the 138 third-party agents with a fixed price and a public address, 9 answered with a working availability check and input schema, and none of them cleans a table or writes product text. The scan's output is not in this repo.
@@ -365,6 +391,7 @@ CI runs every test on macOS and Windows, including starting a specialist agent a
 - A standard third-party seller would not fit today without an adapter: quote fields, input hash, result hash and its longer deadlines all differ from what our guard expects.
 - The specialist agents listen on 127.0.0.1, so a demo runs on one machine.
 - A specialist agrees to every refund on its own. A real seller could dispute.
+- A failure of the worker between a failed check and the refund request is only repaired by starting the same task again. Nothing sweeps for owed refunds on its own.
 - A refund has to be requested at least 5 minutes before the escrow unlocks. If the machine is down past that, a seller whose result fails its check can still collect.
 - Jev has not vetoed or escalated on Preprod. All its reviews in our chain runs approved. Its vetoes are in C7.
 - An agent could pad its track record by buying from itself, and nothing here checks for that.

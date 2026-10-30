@@ -21,8 +21,10 @@ const LIVE_POLL_MS = 15_000;
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
-export function createLiveParts() {
-  const ownerPins = existsSync(OWNER_PINS_PATH) ? readJson(OWNER_PINS_PATH) : [];
+// A paid task's table belongs to a customer, who has not agreed to send it to anyone the operator pinned,
+// so only a run the operator starts by hand uses the pins.
+export function createLiveParts({useOwnerPins = false} = {}) {
+  const ownerPins = useOwnerPins && existsSync(OWNER_PINS_PATH) ? readJson(OWNER_PINS_PATH) : [];
   const allowlist = mergedAllowlist(readJson(ALLOWLIST_PATH), ownerPins);
   const get = createBlockfrost({key: process.env.BLOCKFROST_API_KEY_PREPROD});
   return {

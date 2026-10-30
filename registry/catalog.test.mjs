@@ -136,7 +136,7 @@ test('an agent reads as hireable only with our contract, a fixed price and a pub
 });
 
 test('private and placeholder addresses are not public, by the text alone', () => {
-  for (const url of ['http://localhost:1', 'http://127.0.0.1:9', 'http://10.0.0.1', 'http://192.168.1.1', 'http://172.16.0.1', 'http://169.254.169.254', 'https://api.example.com', 'http://[::1]/', 'not a url', 'ftp://agent.test']) {
+  for (const url of ['http://localhost:1', 'http://127.0.0.1:9', 'http://10.0.0.1', 'http://192.168.1.1', 'http://172.16.0.1', 'http://169.254.169.254', 'https://api.example.com', 'http://[::1]/', 'not a url', 'ftp://agent.test', 'https://localhost.', 'https://x.local.', 'https://metadata.google.internal.', 'https://foo.localhost', 'https://100.64.0.1', 'https://198.18.0.1', 'https://224.0.0.1', 'https://0.1.2.3']) {
     assert.equal(isPublicAddress(url), false, url);
   }
   assert.equal(isPublicAddress('https://agent.masumi.network/x'), true);

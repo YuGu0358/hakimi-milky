@@ -125,11 +125,11 @@ test('G3 denies a quote that echoes another purchaser nonce', () => {
 test('G4 requires delivery strictly before deliverBy', () => {
   assertDenied(guard(ctx({quote: quote({submitResultTime: mandate.deliverBy})})), 'G4', 'G4_LATE_DELIVERY');
   assertDenied(guard(ctx({quote: quote({submitResultTime: mandate.deliverBy + 1000})})), 'G4', 'G4_LATE_DELIVERY');
-  assert.equal(guard(ctx({quote: quote({submitResultTime: mandate.deliverBy - 1})})).ok, true);
+  assert.equal(guard(ctx({quote: quote({submitResultTime: mandate.deliverBy - 1, unlockTime: mandate.lockUntil, externalDisputeUnlockTime: mandate.lockUntil + 15 * MINUTE_MS})})).ok, true);
 });
 
 test('G4 allows unlock exactly at lockUntil and denies one millisecond later', () => {
-  assert.equal(guard(ctx({quote: quote({unlockTime: mandate.lockUntil})})).ok, true);
+  assert.equal(guard(ctx({quote: quote({unlockTime: mandate.lockUntil, externalDisputeUnlockTime: mandate.lockUntil + 15 * MINUTE_MS})})).ok, true);
   assertDenied(guard(ctx({quote: quote({unlockTime: mandate.lockUntil + 1})})), 'G4', 'G4_LOCKED_TOO_LONG');
 });
 
@@ -265,4 +265,18 @@ test('guard does not mutate the context it receives', () => {
   guard({...input, quote: quote({blockchainIdentifier: 'bid-2'})});
   checkProposal({mandate: input.mandate, ledger: input.ledger, proposal: proposal(), listing: standard});
   assert.deepEqual(input, before);
+});
+
+test('a quote that leaves no time to ask for a refund is refused', () => {
+  const late = quote();
+  const noWindow = guard(ctx({quote: {...late, unlockTime: late.submitResultTime + 1, externalDisputeUnlockTime: late.externalDisputeUnlockTime}}));
+  const noDispute = guard(ctx({quote: {...late, externalDisputeUnlockTime: late.unlockTime + 1}}));
+
+  assert.equal(noWindow.code, 'G4_NO_REFUND_WINDOW');
+  assert.equal(noDispute.code, 'G4_NO_REFUND_WINDOW');
+});
+
+test('a quote naming another payment source is refused before any order', () => {
+  assert.equal(guard(ctx({quote: quote({paymentSourceType: 'Web3CardanoV1'})})).code, 'G1_WRONG_PAYMENT_SOURCE');
+  assert.equal(guard(ctx({expectedSourceIndex: 3})).code, 'G1_WRONG_PAYMENT_SOURCE');
 });

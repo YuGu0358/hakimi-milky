@@ -51,14 +51,17 @@ function parseReply(text) {
     if (!Array.isArray(reply?.proposals)) return {error: 'The reply has no proposals list'};
     return {items: reply.proposals};
   } catch (error) {
-    return {error: `The reply is not JSON: ${error.message}`};
+    return {error: 'The reply is not JSON'};
   }
 }
+
+const KNOWN_FIELDS = new Set(Object.keys(Proposal.shape));
 
 function checkItem(item, subtask) {
   const parsed = Proposal.safeParse({proposalId: `p-${randomUUID().slice(0, 8)}`, ...item});
   if (!parsed.success) {
-    const problems = parsed.error.issues.map((issue) => `${issue.path.join('.') || 'proposal'}: ${issue.message}`);
+    // Codes only: zod's messages repeat what the model wrote, and this text can reach the owner.
+    const problems = parsed.error.issues.map((issue) => `${issue.path.filter((part) => typeof part === 'number' || KNOWN_FIELDS.has(part)).join('.') || 'proposal'}: ${issue.code}`);
     return {rejected: {error: problems.join('; '), raw: item}};
   }
   if (parsed.data.subtask !== subtask) {

@@ -129,6 +129,14 @@ test('copy that covers every SKU and follows the text rules passes', () => {
   assert.deepEqual(checkCopy(goodCopy), {ok: true, failures: []});
 });
 
+test('copy with a bare domain or an email address is refused as markup', () => {
+  const withText = (extra) => ({...goodCopy, 'HM-001': `${goodCopy['HM-001']} ${extra}`});
+
+  assert.ok(codes(checkCopy(withText('Order at evil.com'))).includes('A6_MARKUP'));
+  assert.ok(codes(checkCopy(withText('Write to a@b'))).includes('A6_MARKUP'));
+  assert.equal(checkCopy(goodCopy).ok, true);
+});
+
 test('A1 also applies to copy', () => {
   assert.ok(codes(checkCopy(goodCopy, {onChainResultHash: 'ee'.repeat(32)})).includes('A1_HASH_MISMATCH'));
 });

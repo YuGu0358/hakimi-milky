@@ -10,13 +10,13 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 200; // far above today's registries, to stop on a server that never ends
 const METADATA_CONCURRENCY = 8;
 
-const NOT_PUBLIC_HOST = /^(localhost|.*\.local|.*\.internal|.*\.test|.*\.invalid|(.*\.)?example\.(com|org|net)|0\.0\.0\.0|127\..*|10\..*|192\.168\..*|172\.(1[6-9]|2\d|3[01])\..*|169\.254\..*|\[.*\])$/i;
+const NOT_PUBLIC_HOST = /^(localhost|.*\.localhost|.*\.local|.*\.internal|.*\.test|.*\.invalid|(.*\.)?example\.(com|org|net)|0\..*|127\..*|10\..*|192\.168\..*|172\.(1[6-9]|2\d|3[01])\..*|169\.254\..*|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\..*|198\.(18|19)\..*|2[2-5]\d\.\d+\.\d+\.\d+|\[.*\])$/i;
 
 // Judged by the text alone, so it says nothing about where a name resolves.
 export function isPublicAddress(url) {
   if (!URL.canParse(url)) return false;
   const {protocol, hostname} = new URL(url);
-  return (protocol === 'https:' || protocol === 'http:') && !NOT_PUBLIC_HOST.test(hostname);
+  return (protocol === 'https:' || protocol === 'http:') && !NOT_PUBLIC_HOST.test(hostname.replace(/\.$/, ''));
 }
 
 function olderPrice(metadata) {

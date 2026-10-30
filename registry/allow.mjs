@@ -32,7 +32,8 @@ function refusalOf({agentIdentifier, quantity, metadata, alias, shareTable, limi
   const listing = listingFromAsset(agentIdentifier, metadata);
   if (!listing) return refuse('cannot_read', 'An old format, another network or no usable address');
   if (!listing.price) return refuse('not_fixed_price', 'Only a fixed price can be checked before any data leaves');
-  const cap = limits.perHire[listing.price.unit];
+  const {unit} = listing.price;
+  const cap = Object.hasOwn(limits.perHire, unit) ? limits.perHire[unit] : null;
   if (!cap) return refuse('wrong_currency', 'Its price is in a unit the budget does not hold');
   if (BigInt(listing.price.amount) > BigInt(cap)) return refuse('over_price', 'Its price is above the limit for one hire');
   if (!isHttps(listing.apiBaseUrl) || !isPublicAddress(listing.apiBaseUrl)) return refuse('not_public', 'Its address is not a public https address');
