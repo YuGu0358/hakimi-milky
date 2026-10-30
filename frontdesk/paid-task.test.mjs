@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdirSync,rmSync} from 'node:fs';
 import {taskHash,purchasePayload,createPaidAdapter,confirmedState,USDM} from './paid-task.mjs';
 const registration={walletId:'seller-wallet',agentIdentifier:'a'.repeat(80),supportedPaymentSourceIndex:0};
 const target={coworkerId:'coworker',organizationId:null};
@@ -39,7 +40,9 @@ const resumable=(fn)=>Object.assign(fn,{canResume:true});
 const finalError=(message)=>Object.assign(new Error(message),{isFinal:true});
 const running={...payment,submitResultTime:String(Date.now()+60000)};
 const coreCounting=()=>{const posts=[];return {posts,core:{...core,post:async(_,body)=>{posts.push(body);return {data:{id:'event'}}}}}};
-test('a resumable answer is called again after a crash in model-pending',async()=>{
+test('a resumable answer is called again after a crash in model-pending',async(t)=>{
+ mkdirSync('.local',{recursive:true});
+ t.after(()=>rmSync('.local/task.txt',{force:true}));
  let sends=0;const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:resumable(async(_,__,deadline,taskId)=>{sends++;assert.equal(taskId,'task');assert.equal(deadline,Number(running.submitResultTime));return 'done'})});
  const state=await adapter.advance(task,{input:'abc',paid:{stage:'model-pending',payment:running}});
  assert.equal(sends,1);assert.equal(state.paid.stage,'result-saved');assert.equal(state.paid.resultHash,taskHash('done'));
