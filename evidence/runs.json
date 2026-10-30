@@ -2,7 +2,7 @@
   {
     "taskId": "01a18d23-4f8f-77a8-b71f-35843d6000ae",
     "title": "C0: a paid job in the TUM workspace",
-    "story": "An owner pays the front desk 1 tUSDM on Sokosumi for a 20-row table. The front desk hires two specialists through Masumi escrow, checks both results and delivers. The text posted on Sokosumi hashes to the result hash on chain. The times below count from the start of hiring, once the owner's money had locked; the whole task took 7.2 minutes. The hire watcher waits 30 minutes past each unlock. That ran out while the Mac was asleep and the Payment Service was down, so a line says the seller had not collected yet. The sellers collected at 17:45 CET, once the Mac woke, recorded later. In the table a seller is the specialist hired for that job. The seller's receipt above is the front desk's own 1 tUSDM.",
+    "story": "An owner pays the front desk 1 tUSDM on Sokosumi for a 20-row table. The front desk hires two specialists through Masumi escrow, checks both results and delivers. The text posted on Sokosumi hashes to the result hash on chain. The times below count from the moment the owner's mandate was fixed. The front desk's result reached the chain 4.6 minutes after the owner's money locked. The hire watcher waits 30 minutes past each unlock. That ran out while the Mac was asleep and the Payment Service was down, so a line says the seller had not collected yet. The sellers collected at 17:45 CET, once the Mac woke, recorded later. In the table a seller is the specialist hired for that job. The seller's receipt above is the front desk's own 1 tUSDM.",
     "sokosumiTask": "01a18d23-4f8f-77a8-b71f-35843d6000ae, Coworker 01a189e8-8258-707e-97c5-c06718385eb7",
     "transactions": [
       {

@@ -72,7 +72,7 @@ There is no C4 row. C4, a seller quoting outside the mandate, was tested in code
 
 ### C0: a paid job in the TUM workspace, with the front desk hiring
 
-This is the paid job for the Cardano track. Task `01a18d23-4f8f-77a8-b71f-35843d6000ae` for Coworker `01a189e8-8258-707e-97c5-c06718385eb7`, in the TUM-Hackathon workspace, with a 20-row table. The owner paid 1 tUSDM into escrow. The front desk hired the cheap normalizer and the copywriter for 0.4 tUSDM, checked both results and delivered 7.2 minutes after it started the task. The evidence page shows 3.6 minutes, because it counts from the start of hiring, once the owner's money had locked. The text posted on Sokosumi hashes to the result hash on chain.
+This is the paid job for the Cardano track. Task `01a18d23-4f8f-77a8-b71f-35843d6000ae` for Coworker `01a189e8-8258-707e-97c5-c06718385eb7`, in the TUM-Hackathon workspace, with a 20-row table. The owner paid 1 tUSDM into escrow. The front desk hired the cheap normalizer and the copywriter for 0.4 tUSDM, checked both results and delivered. The orchestrator delivered 3.6 minutes after it fixed the owner's mandate, which is the time the evidence page shows, and the front desk's result reached the chain 4.6 minutes after the owner's 1 tUSDM was locked. The evidence page shows 3.6 minutes, because it counts from the start of hiring, once the owner's money had locked. The text posted on Sokosumi hashes to the result hash on chain.
 
 | Step | Transaction |
 | --- | --- |
@@ -360,7 +360,8 @@ CI runs every test on macOS and Windows, including starting a specialist agent a
 
 ## Demo limits
 
-- All the agents we hire are our own. A scan of the Preprod registry on 30 October found 348 live agents, 4 of them ours. Of the 138 third-party agents with a fixed price and a public address, 9 answered with a working availability check and input schema, and none of them cleans a table or writes product text. The scan's output is not in this repo.
+- All the agents we hire are our own. A scan of the current Preprod registry, the one our Payment Service pays through (policy `67ab0c92…`), on 30 October found 348 live agents, 4 of them ours. Of the 138 third-party agents with a fixed price and a public address, 9 answered with a working availability check and input schema, and none of them cleans a table or writes product text. The scan's output is not in this repo.
+- Of the 20 agents listed on Sokosumi on 30 October, 19 matched entries in an older registry (policy `7e8bdaf2…`), which holds 1154 live agents and pays through another escrow contract (`addr_test1wz7j4kmg…`). One matched both registries and could not be identified. Our Payment Service has only the current contract connected, so the orchestrator cannot pay these agents yet. As a test we hired one by hand on Sokosumi: Expose: Advanced Web Research, job `01a18c48-81c6-70cb-ad0a-313d9bb693ac`. The seller collected after the escrow unlocked, in [6da0d8a2…](https://preprod.cardanoscan.io/transaction/6da0d8a2d0c03cc87a40b7aff333092d314c3a7adcb1317acb796cf3b6fdbcd4). That hire went through neither our guard nor our Payment Service.
 - A standard third-party seller would not fit today without an adapter: quote fields, input hash, result hash and its longer deadlines all differ from what our guard expects.
 - The specialist agents listen on 127.0.0.1, so a demo runs on one machine.
 - A specialist agrees to every refund on its own. A real seller could dispute.
