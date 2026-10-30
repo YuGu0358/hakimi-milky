@@ -62,7 +62,10 @@ export async function orchestrate({
     ledger.append({step: 'mandate.confirmed', detail: {id: mandate.id, hash: mandateHash(mandate)}});
   }
 
-  const registered = await payments.listAgents();
+  // Anyone can register, so names in the registry are text written by strangers. The planner
+  // reads them, and it has no reason to see an agent the owner did not put on the list.
+  const isAllowlisted = ({agentIdentifier}) => mandate.allowlist.some((entry) => entry.agentIdentifier === agentIdentifier);
+  const registered = (await payments.listAgents()).filter(isAllowlisted);
   const currentListings = () => {
     const localRecords = recordsFromLedger(ledger.state());
     return registered.map((listing) => withTrackRecord(listing, trackRecords, localRecords));

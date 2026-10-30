@@ -109,7 +109,7 @@ async function main([command = 'create']) {
   throw new Error('Usage: create | top-up');
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     await main(process.argv.slice(2));
   } catch (error) {
