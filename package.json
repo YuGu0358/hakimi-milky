@@ -1,0 +1,22 @@
+{
+  "name": "hakimi-milky",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "3.0.62",
+    "@typesafe-ai/sdk": "0.7.0",
+    "ai": "7.0.127",
+    "async-mutex": "0.5.0",
+    "csv-parse": "7.0.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "fast-check": "4.10.2"
+  }
+}
