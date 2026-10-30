@@ -9,6 +9,7 @@ import {createMandate} from './mandate.mjs';
 import {createPurchaser} from './purchaser.mjs';
 import {mergeDeliverable, orchestrate} from './run.mjs';
 import {MINUTE_MS, USDM_UNIT} from '../shared/constants.mjs';
+import {PaymentsError} from '../shared/errors.mjs';
 import {jobPrompt} from '../shared/schemas.mjs';
 import {createMockPayments} from '../payments/mock.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
@@ -122,6 +123,51 @@ test('the planner only sees agents on the allowlist, because strangers write the
   assert.equal(result.ok, true);
   assert.ok(seen.includes(standard.name));
   assert.equal(seen.includes(evil.name), false);
+});
+
+test('an order the service cannot show yet is noted once, not on every poll', async () => {
+  let misses = 4;
+  const {go, ledger} = world({
+    script: happyScript,
+    wrap: (payments) => ({
+      ...payments,
+      getPurchase: async (id) => {
+        if (misses > 0) {
+          misses -= 1;
+          throw new PaymentsError('Purchase not found', {status: 404});
+        }
+        return payments.getPurchase(id);
+      },
+    }),
+  });
+
+  const result = await go();
+
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(linesOf(ledger, 'purchase.lookup_failed').length, 0);
+  assert.ok(linesOf(ledger, 'purchase.not_visible_yet').length <= 2);
+  assert.ok(linesOf(ledger, 'purchase.not_visible_yet').length >= 1);
+});
+
+test('a lookup that fails for another reason is still logged each time', async () => {
+  let misses = 2;
+  const {go, ledger} = world({
+    script: happyScript,
+    wrap: (payments) => ({
+      ...payments,
+      getPurchase: async (id) => {
+        if (misses > 0) {
+          misses -= 1;
+          throw new PaymentsError('Service unavailable', {status: 503});
+        }
+        return payments.getPurchase(id);
+      },
+    }),
+  });
+
+  await go();
+
+  assert.equal(linesOf(ledger, 'purchase.lookup_failed').length, 2);
 });
 
 test('C1: two specialists work in parallel, both pass, the owner gets one merged table', async () => {

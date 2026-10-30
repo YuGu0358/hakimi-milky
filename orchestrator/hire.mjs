@@ -67,7 +67,9 @@ export function createHirer({
     try {
       return await payments.getPurchase(ctx.quote.blockchainIdentifier);
     } catch (error) {
-      record(ctx, 'purchase.lookup_failed', {reason: error.message});
+      // A wallet-scoped key cannot see an order until the node has picked its wallet, about a minute in.
+      if (error.kind === 'not-found') recordOnce(ctx, 'purchase.not_visible_yet', {reason: error.message});
+      else record(ctx, 'purchase.lookup_failed', {reason: error.message});
       return null;
     }
   }
