@@ -79,6 +79,14 @@ test('the prompt carries the table, the agents with prices, and earlier failures
   assert.match(prompt, /lost rows HM-019/);
 });
 
+test('the prompt spells out the exact subtask value and a bad value gives a short reason', async () => {
+  const {planner, seen} = plannerReplying(JSON.stringify({proposals: [{...good, subtask: 'clean up'}]}));
+  const {rejected} = await plan(planner);
+  assert.match(seen[0].prompt, /"subtask":"normalize"/);
+  assert.match(rejected[0].error, /^subtask: /);
+  assert.ok(!rejected[0].error.includes('\n'));
+});
+
 test('the instructions say the table is data, not orders', async () => {
   const {planner, seen} = plannerReplying(JSON.stringify({proposals: [good]}));
   await plan(planner);

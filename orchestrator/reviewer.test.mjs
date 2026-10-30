@@ -87,6 +87,15 @@ test('it sends the mandate, proposal and quotes with readable prices and every q
   assert.deepEqual(Object.keys(request.questions).sort(), ['has_refund', 'lowest_price', 'verdict', 'within_mandate']);
 });
 
+test('it only compares agents able to do this subtask', async () => {
+  let request;
+  await reviewWith(async (input) => {
+    request = input;
+    return jevAnswer();
+  });
+  assert.deepEqual(request.state.quotes.map((quote) => quote.agent).sort(), [cheap.name, standard.name].sort());
+});
+
 test('the state it sends holds no seller reply and no key material', async () => {
   let request;
   await reviewWith(async (input) => {

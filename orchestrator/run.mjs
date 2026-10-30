@@ -15,6 +15,36 @@ const describe = (outcome) =>
 
 const watchesOf = (outcomes) => outcomes.flatMap((outcome) => (outcome?.watch ? [outcome.watch] : []));
 
+const COMPLETED = new Set(['accepted', 'withdrawn']);
+const REFUNDED = new Set(['acceptance_failed', 'refund_pending', 'refund_requested', 'refund_authorized', 'refund_withdrawn']);
+
+// What this run has seen so far, so a refund counts against an agent before it shows up on chain.
+export function recordsFromLedger(state) {
+  return Object.values(state.purchases).reduce((records, {terms, status}) => {
+    const {completed, refunded} = records[terms.agentIdentifier] ?? {completed: 0, refunded: 0};
+    return {
+      ...records,
+      [terms.agentIdentifier]: {
+        completed: completed + (COMPLETED.has(status) ? 1 : 0),
+        refunded: refunded + (REFUNDED.has(status) ? 1 : 0),
+      },
+    };
+  }, {});
+}
+
+function withTrackRecord(listing, chainRecords, localRecords) {
+  const chain = chainRecords[listing.agentIdentifier];
+  const local = localRecords[listing.agentIdentifier];
+  if (!chain && !local) return listing;
+  return {
+    ...listing,
+    trackRecord: {
+      completed: Math.max(chain?.completed ?? 0, local?.completed ?? 0),
+      refunded: Math.max(chain?.refunded ?? 0, local?.refunded ?? 0),
+    },
+  };
+}
+
 export async function orchestrate({
   table,
   acceptance,
@@ -32,21 +62,22 @@ export async function orchestrate({
     ledger.append({step: 'mandate.confirmed', detail: {id: mandate.id, hash: mandateHash(mandate)}});
   }
 
-  const listings = (await payments.listAgents()).map((listing) => ({
-    ...listing,
-    ...(trackRecords[listing.agentIdentifier] ? {trackRecord: trackRecords[listing.agentIdentifier]} : {}),
-  }));
+  const registered = await payments.listAgents();
+  const currentListings = () => {
+    const localRecords = recordsFromLedger(ledger.state());
+    return registered.map((listing) => withTrackRecord(listing, trackRecords, localRecords));
+  };
 
   // Pick up whatever a previous process left behind, the nearest unlock first.
   const earlier = Object.values(ledger.state().purchases).sort((a, b) => a.terms.unlockTime - b.terms.unlockTime);
   const resumed = await Promise.all(
     earlier.map(async (purchase) => ({
       subtask: purchase.subtask,
-      outcome: await hirer.resume(purchase, {job: jobs[purchase.subtask], listings}),
+      outcome: await hirer.resume(purchase, {job: jobs[purchase.subtask], listings: registered}),
     })),
   );
 
-  async function nextProposal(subtask, feedback) {
+  async function nextProposal(subtask, feedback, listings) {
     const {proposals, rejected} = await planner.plan({subtask, table, listings, feedback});
     rejected.forEach(({error}) => ledger.append({step: 'plan.rejected', subtask, reason: error}));
     const [proposal] = proposals;
@@ -69,7 +100,8 @@ export async function orchestrate({
     const outcomes = [...before];
     let feedback = before.filter((outcome) => outcome.status === 'failed').map(describe);
     for (let round = 0; round < MAX_PLAN_ROUNDS && clock() < mandate.deliverBy; round += 1) {
-      const {proposal, errors} = await nextProposal(subtask, feedback);
+      const listings = currentListings();
+      const {proposal, errors} = await nextProposal(subtask, feedback, listings);
       feedback = [...feedback, ...errors];
       if (proposal) {
         const outcome = await hirer.hire({proposal, job: jobs[subtask], listings});

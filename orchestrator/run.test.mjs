@@ -249,6 +249,23 @@ test('a veto sends nothing to that agent and the planner hears why', async () =>
   assert.match(second.feedback.join(' '), /one refund on record/);
 });
 
+test('a refund earlier in the run counts against that agent when the next hire is reviewed', async () => {
+  const seen = [];
+  const review = async ({proposal, listings}) => {
+    if (proposal.agentIdentifier === standard.agentIdentifier) {
+      seen.push(listings.find((listing) => listing.agentIdentifier === cheap.agentIdentifier).trackRecord);
+    }
+    return {decision: 'allow', reason: 'fine'};
+  };
+  const {go} = world({
+    review,
+    faults: {dropRows: 2},
+    script: {normalize: [propose(cheap, 'normalize'), propose(standard, 'normalize')], copy: [propose(copy, 'copy')]},
+  });
+  await go();
+  assert.deepEqual(seen, [{completed: 0, refunded: 1}]);
+});
+
 test('an unsure reviewer stops the run and asks the owner, nothing gets paid', async () => {
   const review = async () => ({decision: 'escalate', reason: 'Reviewer unavailable'});
   const {go, ledger, calls} = world({review, script: happyScript});

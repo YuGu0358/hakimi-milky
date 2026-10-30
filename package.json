@@ -6,7 +6,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\""
+    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\"",
+    "offline": "node --env-file-if-exists=.env orchestrator/run-offline.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.62",

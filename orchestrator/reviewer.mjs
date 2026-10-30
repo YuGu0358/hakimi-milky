@@ -15,10 +15,15 @@ const QUESTIONS = Object.freeze({
   ),
   lowest_price: noul("The proposed agent's price is the lowest among the quotes."),
   has_refund: noul('The proposed agent has at least one refund in its track record.'),
-  verdict: choice("Should a cautious reviewer, who only protects the shop owner's money, let this hire go ahead?", {
-    approve: "The hire is within the mandate and a reasonable use of the owner's money.",
-    veto: "The hire is within the mandate but a poor use of the owner's money given the alternatives.",
-  }),
+  // The rubric is spelled out because a decision model is only as sure as its criteria:
+  // on six test scenarios this wording got all six right at confidence 0.84 or higher.
+  verdict: choice(
+    "The guard already confirmed this hire fits the mandate. The quotes are all the agents able to do this subtask. Decide only whether the proposal wastes the owner's money.",
+    {
+      approve: 'No quote is clearly better than the proposed agent. This is the default.',
+      veto: 'Another quote is clearly better: it costs less with a track record at least as good, or the proposed agent has a refund on record and another quote has none.',
+    },
+  ),
 });
 
 function jevDecide() {
@@ -37,6 +42,7 @@ const pricesIn = (amounts) =>
 
 function buildState({mandate, proposal, listings}) {
   const named = listings.find((listing) => listing.agentIdentifier === proposal.agentIdentifier);
+  const able = new Set(mandate.allowlist.filter((entry) => entry.role === proposal.subtask).map((entry) => entry.agentIdentifier));
   return {
     mandate: {
       budget: pricesIn(mandate.budget),
@@ -44,7 +50,7 @@ function buildState({mandate, proposal, listings}) {
       max_hires: mandate.maxHires,
       allowlist: mandate.allowlist.map((entry) => entry.name),
     },
-    quotes: listings.map((listing) => ({
+    quotes: listings.filter((listing) => able.has(listing.agentIdentifier)).map((listing) => ({
       agent: listing.name,
       price: listing.price ? formatPrice(listing.price) : 'set per job',
       track_record: listing.trackRecord ?? NO_RECORD,

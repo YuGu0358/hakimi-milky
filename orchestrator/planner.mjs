@@ -31,7 +31,7 @@ function describeAgent(listing) {
 
 function buildPrompt({subtask, table, listings, feedback}) {
   const failures = feedback.length > 0 ? feedback.map((item) => `- ${item}`).join('\n') : 'none';
-  return `Subtask: ${subtask} (${SUBTASK_BRIEFS[subtask]})
+  return `Subtask: ${subtask} (${SUBTASK_BRIEFS[subtask]}). Write "subtask":"${subtask}" in your reply.
 
 Agents:
 ${listings.map(describeAgent).join('\n')}
@@ -62,7 +62,10 @@ function parseReply(text) {
 
 function checkItem(item, subtask) {
   const parsed = Proposal.safeParse({proposalId: `p-${randomUUID().slice(0, 8)}`, ...item});
-  if (!parsed.success) return {rejected: {error: parsed.error.message.slice(0, 300), raw: item}};
+  if (!parsed.success) {
+    const problems = parsed.error.issues.map((issue) => `${issue.path.join('.') || 'proposal'}: ${issue.message}`);
+    return {rejected: {error: problems.join('; '), raw: item}};
+  }
   if (parsed.data.subtask !== subtask) {
     return {rejected: {error: `Asked for ${subtask}, got ${parsed.data.subtask}`, raw: item}};
   }
