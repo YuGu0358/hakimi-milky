@@ -12,6 +12,7 @@
     "batch": "node --env-file-if-exists=.env orchestrator/run-batch.mjs",
     "redteam": "node --env-file-if-exists=.env orchestrator/run-redteam.mjs",
     "probe:c2": "node --env-file-if-exists=.env payments/probe-c2.mjs",
+    "payments:key": "node --env-file-if-exists=.env payments/buyer-key.mjs",
     "specialists": "node --env-file-if-exists=.env specialists/start.mjs",
     "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs",
     "online": "node ops/keep-online.mjs start",

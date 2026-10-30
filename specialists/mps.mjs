@@ -10,16 +10,16 @@ async function readJson(response) {
   }
 }
 
-// Calls the Payment Service. With a body it is a POST, without one a GET.
+// Calls the Payment Service. With a body it is a POST unless told otherwise, without one a GET.
 // A timeout or a dropped connection has no status, which makes it an uncertain outcome.
 export function createMps({baseUrl, token}) {
   if (!baseUrl) throw new Error('Set MPS_URL');
   if (!token) throw new Error('The Payment Service key is missing');
-  return async (path, body) => {
+  return async (path, body, {method} = {}) => {
     let response;
     try {
       response = await fetch(`${baseUrl}/api/v1${path}`, {
-        method: body ? 'POST' : 'GET',
+        method: method ?? (body ? 'POST' : 'GET'),
         headers: {token, 'content-type': 'application/json'},
         body: body ? JSON.stringify(body) : undefined,
         redirect: 'error',

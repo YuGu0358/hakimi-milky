@@ -7,7 +7,10 @@ import {createMaliciousPlanner} from './malicious-planner.mjs';
 import {createPlanner} from './planner.mjs';
 import {createReviewer} from './reviewer.mjs';
 import {printEvidence, scenarioNamed} from './scenarios.mjs';
+import {requireSavedRuntimeToken} from '../frontdesk/registration-config.mjs';
 import {acquireWorkerLock} from '../frontdesk/worker-lock.mjs';
+import {BUYER_TOKEN_PATH} from '../payments/buyer-key.mjs';
+import {createPayments} from '../payments/payments.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 import {ALLOWLIST_PATH} from '../specialists/paths.mjs';
 
@@ -20,35 +23,33 @@ const LOG_DIR = fileURLToPath(new URL('../.local/', import.meta.url));
 const TRACK_RECORDS_PATH = join(LOG_DIR, 'track-records.json');
 const LIVE_POLL_MS = 15_000;
 
-async function loadPayments() {
-  try {
-    return await import('../payments/payments.mjs');
-  } catch (error) {
-    if (error.code === 'ERR_MODULE_NOT_FOUND') throw new Error(`Cannot load the real payment client: ${error.message}`, {cause: error});
-    throw error;
-  }
-}
-
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
 async function main([name = 'c1', givenTaskId]) {
   const scenario = scenarioNamed(name);
-  const release = acquireWorkerLock(join(LOG_DIR, 'orchestrator.lock'));
+  const taskId = givenTaskId ?? `live-${name}-${Date.now()}`;
+  // One process per task, so a second one cannot resume the same purchases. Other tasks have
+  // their own mandate, and the buyer key's credit still caps what all of them spend together.
+  const release = acquireWorkerLock(join(LOG_DIR, 'locks', `${taskId}.lock`));
   process.once('exit', release);
   process.once('SIGINT', () => process.exit(130));
   process.once('SIGTERM', () => process.exit(143));
-
-  const taskId = givenTaskId ?? `live-${name}-${Date.now()}`;
   console.log(`Task ${taskId}. To resume after a crash: npm run live -- ${name} ${taskId}`);
 
+  const allowlist = readJson(ALLOWLIST_PATH);
   const honest = createPlanner({generate: createGenerate()});
   const {ledger, run} = assembleRun({
     taskId,
     directory: LOG_DIR,
-    allowlist: readJson(ALLOWLIST_PATH),
+    allowlist,
     acceptance,
     table: scenario.table,
-    payments: await loadPayments(),
+    payments: createPayments({
+      mpsUrl: process.env.MPS_URL,
+      token: requireSavedRuntimeToken(BUYER_TOKEN_PATH),
+      blockfrostKey: process.env.BLOCKFROST_API_KEY_PREPROD,
+      knownAgentIds: allowlist.map(({agentIdentifier}) => agentIdentifier),
+    }),
     planner: scenario.malicious ? createMaliciousPlanner({planner: honest}) : honest,
     review: createReviewer(),
     trackRecords: existsSync(TRACK_RECORDS_PATH) ? readJson(TRACK_RECORDS_PATH) : {},

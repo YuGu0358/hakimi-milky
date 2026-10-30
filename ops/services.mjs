@@ -1,4 +1,4 @@
-import {exec, spawn} from 'node:child_process';
+import {exec, spawn, spawnSync} from 'node:child_process';
 import {closeSync, existsSync, openSync, readFileSync} from 'node:fs';
 import {delimiter, dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -94,7 +94,8 @@ export async function isHealthy(service) {
 
 function stopTree(pid) {
   if (IS_WINDOWS) {
-    spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {stdio: 'ignore', windowsHide: true});
+    // Waits for it, because the supervisor may be about to exit. The pid is the shell's, so /t ends the service too.
+    spawnSync('taskkill', ['/pid', String(pid), '/t', '/f'], {stdio: 'ignore', windowsHide: true});
     return;
   }
   const signal = (name) => {

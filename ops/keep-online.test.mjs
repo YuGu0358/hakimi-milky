@@ -41,9 +41,21 @@ async function answers(port) {
   }
 }
 
+// Dies when asked, because the pid the supervisor knows on Windows is the shell's, not the server's.
 const SERVER_SOURCE = `import {createServer} from 'node:http';
-createServer((_req, res) => res.end('ok')).listen(Number(process.env.PORT), '127.0.0.1');
+createServer((req, res) => {
+  if (req.url === '/die') process.exit(1);
+  res.end('ok');
+}).listen(Number(process.env.PORT), '127.0.0.1');
 `;
+
+async function crash(port) {
+  try {
+    await fetch(`http://127.0.0.1:${port}/die`, {signal: AbortSignal.timeout(1_000)});
+  } catch {
+    // The connection drops when the server exits, which is the point.
+  }
+}
 
 async function setup(t) {
   const directory = mkdtempSync(join(tmpdir(), 'online-'));
@@ -92,14 +104,7 @@ async function setup(t) {
   t.after(async () => {
     command('stop');
     await sleep(300);
-    const pid = readStatus()?.pid;
-    if (pid) {
-      try {
-        process.kill(pid);
-      } catch (error) {
-        if (error.code !== 'ESRCH') throw error;
-      }
-    }
+    await crash(port);
   });
   return {directory, port, readStatus, command, run};
 }
@@ -116,7 +121,7 @@ test('it starts a service that is down, and starts it again after it dies', asyn
     const status = readStatus();
     return status?.healthy && status.pid ? status : null;
   }, 'the service to answer');
-  process.kill(first.pid);
+  await crash(port);
   const second = await waitFor(() => {
     const status = readStatus();
     return status?.healthy && status.pid && status.pid !== first.pid ? status : null;
