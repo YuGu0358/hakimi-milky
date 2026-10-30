@@ -64,7 +64,8 @@ export function projectServices(env = process.env) {
     {
       name: 'payment-service',
       cwd: mpsDir,
-      command: 'corepack pnpm run dev',
+      // Not its dev script: watch mode outlives a crash, and then only a failed health check can tell.
+      command: 'corepack pnpm exec tsx ./src/index.ts',
       env: {COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'},
       urls: ['http://127.0.0.1:38127/api/v1/health'],
       graceMs: SLOW_BOOT_MS,

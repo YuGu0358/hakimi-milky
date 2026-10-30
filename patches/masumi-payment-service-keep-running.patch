@@ -1,0 +1,23 @@
+diff --git a/src/index.ts b/src/index.ts
+index a90ad62..b9efacf 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,5 +1,18 @@
+ import { setupTracing } from '@/tracing';
+ 
++// got 11 can schedule a retry for a Blockfrost request that has already finished. Its timer then throws
++// where no caller can catch it, which stops the whole service and its escrow jobs. Nothing waits on that
++// request, so this one error is logged and ignored. Any other uncaught error still ends the process.
++const GOT_RETRY_AFTER_SETTLED = 'The `onCancel` handler was attached after the promise settled.';
++process.on('uncaughtException', (error) => {
++	if (error.message === GOT_RETRY_AFTER_SETTLED) {
++		console.error('Ignored a retry for a finished request:', error.message);
++		return;
++	}
++	console.error('Uncaught exception', error);
++	process.exit(1);
++});
++
+ export async function bootstrap() {
+ 	await setupTracing();
+ 	const { startApp } = await import('@/app');
