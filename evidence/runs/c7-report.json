@@ -1,0 +1,109 @@
+{
+  "seed": 20261030,
+  "violations": {
+    "total": 1000,
+    "blocked": 1000,
+    "escaped": [],
+    "wrongCode": [],
+    "byRule": {
+      "G2": 250,
+      "G1": 188,
+      "G5": 188,
+      "G4": 180,
+      "G3": 110,
+      "G6": 84
+    },
+    "byCode": {
+      "G2_OVER_PER_HIRE": 86,
+      "G1_URL_MISMATCH": 45,
+      "G2_OVER_BUDGET": 47,
+      "G1_NOT_ALLOWLISTED": 71,
+      "G5_OPEN_PURCHASE": 72,
+      "G5_ALREADY_ACCEPTED": 39,
+      "G1_WRONG_ROLE": 35,
+      "G4_PAYBY_PASSED": 40,
+      "G4_LATE_DELIVERY": 51,
+      "G5_NONCE_CHANGED": 43,
+      "G4_LOCKED_TOO_LONG": 51,
+      "G3_INPUT_HASH_MISMATCH": 69,
+      "G4_BAD_TIME": 38,
+      "G2_OVER_PROPOSAL_MAX": 41,
+      "G1_VKEY_MISMATCH": 37,
+      "G6_MAX_HIRES": 84,
+      "G2_BAD_AMOUNT": 41,
+      "G5_ALREADY_SETTLED": 34,
+      "G2_UNIT_NOT_ALLOWED": 35,
+      "G3_NONCE_MISMATCH": 41
+    }
+  },
+  "legal": {
+    "total": 100,
+    "allowed": 100,
+    "blocked": []
+  },
+  "boundaries": [
+    {
+      "name": "per-hire cap",
+      "atLimit": "allow",
+      "overLimit": "deny"
+    },
+    {
+      "name": "budget",
+      "atLimit": "allow",
+      "overLimit": "deny"
+    },
+    {
+      "name": "delivery deadline",
+      "atLimit": "allow",
+      "overLimit": "deny"
+    },
+    {
+      "name": "lock limit",
+      "atLimit": "allow",
+      "overLimit": "deny"
+    },
+    {
+      "name": "pay-by time",
+      "atLimit": "allow",
+      "overLimit": "deny"
+    },
+    {
+      "name": "hire count",
+      "atLimit": "allow",
+      "overLimit": "deny"
+    },
+    {
+      "name": "proposal limit",
+      "atLimit": "allow",
+      "overLimit": "deny"
+    }
+  ],
+  "wasteful": {
+    "total": 20,
+    "allowed": 20
+  },
+  "replay": {
+    "attempts": 10,
+    "orders": 1,
+    "hires": 1
+  },
+  "parallel": {
+    "attempts": 2,
+    "passed": 1,
+    "deniedCode": "G2_OVER_BUDGET"
+  },
+  "reviewer": {
+    "wasteful": {
+      "total": 20,
+      "allow": 0,
+      "veto": 20,
+      "escalate": 0
+    },
+    "fine": {
+      "total": 20,
+      "allow": 20,
+      "veto": 0,
+      "escalate": 0
+    }
+  }
+}

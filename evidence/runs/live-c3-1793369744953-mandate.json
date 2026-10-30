@@ -1,0 +1,82 @@
+{
+  "id": "mandate-live-c3-1793369744953",
+  "taskId": "live-c3-1793369744953",
+  "budget": {
+    "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d": "800000"
+  },
+  "perHire": {
+    "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d": "400000"
+  },
+  "maxHires": 3,
+  "allowlist": [
+    {
+      "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b108644e262a3e7c8da68ec66c971f2bbecf0d39851fe19a6d122fa878e000000",
+      "sellerVkey": "035c9c5c862c078684868b366a7bd53bf84756eea71ebf38a37ec5b9",
+      "name": "Hakimi Table Normalizer",
+      "apiBaseUrl": "http://127.0.0.1:4101",
+      "role": "normalize"
+    },
+    {
+      "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b118644e262a3e7c8da68ec66c971f2bbecf0d39851fe19a6d122fa878e000000",
+      "sellerVkey": "035c9c5c862c078684868b366a7bd53bf84756eea71ebf38a37ec5b9",
+      "name": "Hakimi Budget Normalizer",
+      "apiBaseUrl": "http://127.0.0.1:4102",
+      "role": "normalize"
+    },
+    {
+      "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b128644e262a3e7c8da68ec66c971f2bbecf0d39851fe19a6d122fa878e000000",
+      "sellerVkey": "035c9c5c862c078684868b366a7bd53bf84756eea71ebf38a37ec5b9",
+      "name": "Hakimi Copywriter",
+      "apiBaseUrl": "http://127.0.0.1:4103",
+      "role": "copy"
+    }
+  ],
+  "deliverBy": 1793372144954,
+  "lockUntil": 1793373344954,
+  "acceptance": {
+    "required_columns": [
+      "sku",
+      "name",
+      "category",
+      "unit",
+      "price",
+      "stock",
+      "note"
+    ],
+    "key": "sku",
+    "immutable": [
+      "sku",
+      "price"
+    ],
+    "allowed_units": [
+      "pcs",
+      "kg",
+      "m",
+      "box"
+    ],
+    "allowed_categories": [
+      "milk",
+      "tea",
+      "topping",
+      "syrup",
+      "powder",
+      "packaging",
+      "supplies"
+    ],
+    "price_positive": true,
+    "copy": {
+      "max_chars": 160,
+      "must_mention": [
+        "name",
+        "unit"
+      ],
+      "banned_phrases": [
+        "guaranteed",
+        "best in the world",
+        "100% organic",
+        "cures"
+      ]
+    }
+  },
+  "createdAt": 1793369744954
+}

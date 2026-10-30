@@ -1,0 +1,39 @@
+{
+  "ranAt": "2026-10-30T14:15:34.315Z",
+  "attempts": [
+    {
+      "name": "An order above what the key may still spend",
+      "expected": {
+        "status": 400,
+        "text": "Insufficient funds"
+      },
+      "actual": {
+        "status": 400,
+        "message": "Payment Service /purchase answered HTTP 400: Insufficient funds"
+      },
+      "ok": true
+    },
+    {
+      "name": "A seller's payment request, with the buyer's key",
+      "expected": {
+        "status": 404
+      },
+      "actual": {
+        "status": 404,
+        "message": "Payment Service /payment answered HTTP 404: Not found"
+      },
+      "ok": true
+    },
+    {
+      "name": "An order on Mainnet",
+      "expected": {
+        "status": 401
+      },
+      "actual": {
+        "status": 401,
+        "message": "Payment Service /purchase answered HTTP 401: Unauthorized, network not allowed"
+      },
+      "ok": true
+    }
+  ]
+}
