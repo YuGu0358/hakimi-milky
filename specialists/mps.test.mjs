@@ -69,6 +69,21 @@ test('a connection that fails has no status and counts as uncertain', async () =
   });
 });
 
+test('a redirect is refused, so the key never reaches another address', async (t) => {
+  const elsewhere = await serveFake(t, async () => ({}));
+  const server = createServer((_req, res) => {
+    res.writeHead(302, {location: `${elsewhere.baseUrl}/api/v1/payment`});
+    res.end();
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const mps = createMps({baseUrl: `http://127.0.0.1:${server.address().port}`, token: 'test-token'});
+
+  await assert.rejects(mps('/payment', {}), (error) => error.kind === 'uncertain');
+
+  assert.deepEqual(elsewhere.tokens, []);
+});
+
 test('an answer that is not JSON is an error, not a crash', async (t) => {
   const server = createServer((_req, res) => {
     res.writeHead(502);

@@ -99,6 +99,49 @@ test('a result hash on chain that is not ours does not complete the job', async 
   assert.equal(job().status, 'running');
 });
 
+test('a result on chain that is not confirmed yet does not complete the job', async (t) => {
+  const kit = await setupSpecialist(t, {
+    work: standardWork(),
+    mps: (fake) => async (path, body) => {
+      const answer = await fake.request(path, body);
+      if (path !== '/payment/resolve-blockchain-identifier' || answer.onChainState !== 'ResultSubmitted') return answer;
+      return {...answer, CurrentTransaction: {txHash: 'tx', status: 'Pending', newOnChainState: 'ResultSubmitted'}, TransactionHistory: []};
+    },
+  });
+  const {id, blockchainIdentifier: bid} = await kit.start();
+  kit.fake.chain.lockFunds(bid);
+  await kit.loop.tick();
+  kit.fake.chain.confirmResult(bid);
+
+  await kit.loop.tick();
+
+  assert.equal(kit.store.load(id).phase, 'awaiting-result');
+  assert.equal(kit.store.load(id).status, 'running');
+});
+
+test('a submit transaction that failed is logged', async (t) => {
+  const {loop, fake, bid, logged} = await delivered(t);
+  fake.chain.setNextAction(bid, 'WaitingForManualAction', {errorType: 'NetworkError', errorNote: 'The transaction was rejected'});
+
+  await loop.tick();
+
+  assert.match(logged.join('\n'), /The transaction was rejected/);
+});
+
+for (const phase of ['no-show', 'deadline-blocked']) {
+  test(`a job in ${phase} still agrees to a refund`, async (t) => {
+    const kit = await quoted(t);
+    kit.fake.chain.lockFunds(kit.bid);
+    kit.store.save({...kit.job(), phase, status: 'failed'});
+    kit.fake.chain.askRefund(kit.bid);
+
+    await kit.loop.tick();
+
+    assert.equal(kit.fake.callsTo(AUTHORIZE).length, 1);
+    assert.equal(kit.job().phase, 'refund-authorized');
+  });
+}
+
 test('a no-show fault never submits', async (t) => {
   const fault = parseFault('no_show');
   const {loop, fake, job} = await delivered(t, {
@@ -275,6 +318,19 @@ test('restart after a submit that was lost: it is sent', async (t) => {
 
   assert.equal(kit.job().phase, 'awaiting-result');
   assert.equal(kit.fake.callsTo(SUBMIT).length, 1);
+});
+
+test('restart while another transaction is in flight: nothing is sent yet', async (t) => {
+  const kit = await quoted(t);
+  kit.fake.chain.lockFunds(kit.bid);
+  const result = 'saved result';
+  kit.store.save({...kit.job(), phase: 'submit-pending', status: 'running', result, resultHash: resultHash(result, NONCE)});
+  kit.fake.chain.setNextAction(kit.bid, 'SubmitResultInitiated');
+
+  await kit.loop.tick();
+
+  assert.equal(kit.fake.callsTo(SUBMIT).length, 0);
+  assert.equal(kit.job().phase, 'submit-pending');
 });
 
 test('a submit with an unknown outcome is looked up before anything is sent again', async (t) => {

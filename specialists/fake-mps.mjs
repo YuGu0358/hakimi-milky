@@ -99,7 +99,7 @@ export function createFakeMps({clock = Date.now} = {}) {
     // The contract empties the result hash when the seller authorizes a refund.
     confirmRefundAuthorized: (id) => confirm(id, 'RefundAuthorized', {resultHash: ''}),
     finish: (id, state) => confirm(id, state),
-    setNextAction: (id, requestedAction) => update(id, {NextAction: {...payments.get(id).NextAction, requestedAction}}),
+    setNextAction: (id, requestedAction, change = {}) => update(id, {NextAction: {...payments.get(id).NextAction, requestedAction, ...change}}),
     payment: (id) => payments.get(id),
   };
 

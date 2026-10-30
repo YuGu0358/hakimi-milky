@@ -107,6 +107,16 @@ test('without the runtime key it says so and exits', async (t) => {
   assert.match(agent.output.text, /private token/);
 });
 
+test('a fault meant for the cheap agent does not stop the standard one', async (t) => {
+  const fake = createFakeMps();
+  const {baseUrl} = await serveFake(t, fake.request);
+  const agent = startProcess(t, {SPECIALISTS_DIR: agentDirectory(), MPS_URL: baseUrl, FAULT: 'drop_rows:2'});
+
+  const base = await listeningUrl(agent);
+
+  assert.equal((await fetch(`${base}/availability`)).status, 200);
+});
+
 test('an unknown fault stops it at the start', async (t) => {
   const agent = startProcess(t, {SPECIALISTS_DIR: agentDirectory(), MPS_URL: 'http://127.0.0.1:1', FAULT: 'lie'});
 
