@@ -39,14 +39,20 @@ const execAsync = promisify(exec);
 export async function readCoworkerTasks({dir, id, organizationSlug}) {
   if (!id) return [];
   const workspace = organizationSlug ? ` --organization-slug ${organizationSlug}` : '';
-  const {stdout} = await execAsync(`sokosumi --preprod tasks list --coworker-id ${id}${workspace} --json`, {
-    cwd: dir,
-    env: childEnv(),
-    timeout: PROBE_TIMEOUT_MS,
-    maxBuffer: MAX_TASKS_OUTPUT_BYTES,
-    windowsHide: true,
-  });
-  return JSON.parse(stdout).tasks;
+  try {
+    const {stdout} = await execAsync(`sokosumi --preprod tasks list --coworker-id ${id}${workspace} --json`, {
+      cwd: dir,
+      env: childEnv(),
+      timeout: PROBE_TIMEOUT_MS,
+      maxBuffer: MAX_TASKS_OUTPUT_BYTES,
+      windowsHide: true,
+    });
+    return JSON.parse(stdout).tasks;
+  } catch (error) {
+    // The command line says nothing. Its last words say why, such as "command not found".
+    const reason = error.stderr?.trim().split('\n').at(-1);
+    throw new Error(reason || error.message, {cause: error});
+  }
 }
 
 // The default layout is the one on the demo machine: the Payment Service checkout sits beside this repo.
