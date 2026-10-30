@@ -1,3 +1,5 @@
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {dirname} from 'node:path';
 import {MINUTE_MS, USDM_UNIT} from '../shared/constants.mjs';
 import {sha256} from '../shared/hash.mjs';
 import {Mandate} from '../shared/schemas.mjs';
@@ -37,3 +39,24 @@ export function createMandate({
 }
 
 export const mandateHash = (mandate) => sha256(JSON.stringify(mandate));
+
+function readMandate(path) {
+  try {
+    return Mandate.parse(JSON.parse(readFileSync(path, 'utf8')));
+  } catch (error) {
+    throw new Error(`Cannot read the mandate at ${path}: ${error.message}`, {cause: error});
+  }
+}
+
+// The saved file wins over anything passed in, so a restart cannot change what the owner agreed to.
+export function loadOrCreateMandate({path, ...terms}) {
+  if (existsSync(path)) {
+    const saved = readMandate(path);
+    if (saved.taskId !== terms.taskId) throw new Error(`The mandate at ${path} belongs to task ${saved.taskId}, not ${terms.taskId}`);
+    return saved;
+  }
+  const mandate = createMandate(terms);
+  mkdirSync(dirname(path), {recursive: true, mode: 0o700});
+  writeFileSync(path, JSON.stringify(mandate, null, 2), {mode: 0o600, flag: 'wx'});
+  return mandate;
+}
