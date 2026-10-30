@@ -1,0 +1,15 @@
+diff --git a/src/services/transactions/tx-sync/tx/index.ts b/src/services/transactions/tx-sync/tx/index.ts
+index dc809a4..4846422 100644
+--- a/src/services/transactions/tx-sync/tx/index.ts
++++ b/src/services/transactions/tx-sync/tx/index.ts
+@@ -397,7 +397,9 @@ export async function updateTransaction(
+ 				newState,
+ 				paymentContract.id,
+ 				entry.decodedOldContract.blockchainIdentifier,
+-				entry.decodedNewContract?.resultHash ?? entry.decodedOldContract.resultHash,
++				// AuthorizeRefund empties the hash on chain. A null here must stay null, or the
++				// auto-decision job never collects a refund for a purchase that had a result.
++				entry.decodedNewContract ? entry.decodedNewContract.resultHash : entry.decodedOldContract.resultHash,
+ 				entry.decodedNewContract?.buyerCooldownTime ?? 0n,
+ 				entry.decodedNewContract?.sellerCooldownTime ?? 0n,
+ 				sellerWithdrawn,
