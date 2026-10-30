@@ -1,5 +1,6 @@
 import {randomBytes} from 'node:crypto';
 import {MINUTE_MS} from '../shared/constants.mjs';
+import {PaymentsError} from '../shared/errors.mjs';
 import {isConfirmed, jobPrompt} from '../shared/schemas.mjs';
 import {accept} from './acceptance.mjs';
 import {chainProgress} from './chain-progress.mjs';
@@ -10,9 +11,15 @@ const RESULT_GRACE_MS = 2 * MINUTE_MS; // a result sent right at the deadline st
 const NODE_REFUND_WAIT_MS = 15 * MINUTE_MS; // the node refunds a no-show 10 minutes after the deadline
 const COLLECT_WAIT_MS = 30 * MINUTE_MS; // the node collects for the seller 10 minutes after unlock
 const RESULT_FETCH_ATTEMPTS = 3;
+const RESULT_FETCH_WAIT_MS = 5 * MINUTE_MS; // a seller restarting is not a seller withholding
+const REFUND_HEADROOM_MS = 2 * MINUTE_MS; // the wait for a result never eats the time a refund request needs
+const MAX_BLIND_READS = 120; // failed reads in a row past a deadline before a wait gives up; a sleep does not count
+const CATCH_UP_MS = 3 * MINUTE_MS; // after a gap, the service needs time to read the chain again
 const DEFAULT_POLL_MS = 10_000;
 
 const REFUND_UNDERWAY = new Set(['RefundRequested', 'Disputed', 'RefundAuthorized', 'RefundWithdrawn']);
+
+const isCollected = (view) => isConfirmed(view, 'Withdrawn') || isConfirmed(view, 'DisputedWithdrawn');
 
 const refsOf = ({quote, nonce}) => ({
   ...(nonce ? {nonce} : {}),
@@ -49,41 +56,57 @@ export function createHirer({
     }
   }
 
+  // reached says the service answered at all, even if only to say it has no such order yet.
   async function readPurchase(ctx) {
     try {
-      return await payments.getPurchase(ctx.quote.blockchainIdentifier);
+      return {view: await payments.getPurchase(ctx.quote.blockchainIdentifier), reached: true};
     } catch (error) {
       // A wallet-scoped key cannot see an order until the node has picked its wallet, about a minute in.
-      if (error.kind === 'not-found') recordOnce(ctx, 'purchase.not_visible_yet', {reason: error.message});
-      else record(ctx, 'purchase.lookup_failed', {reason: error.message});
-      return null;
+      if (error.kind === 'not-found') {
+        recordOnce(ctx, 'purchase.not_visible_yet', {reason: error.message});
+        return {view: null, reached: true};
+      }
+      record(ctx, 'purchase.lookup_failed', {reason: error.message});
+      return {view: null, reached: false};
     }
   }
 
+  // A failed read says nothing about the chain, and neither does the first answer after a gap:
+  // the service may still be catching up. A deadline only decides after unbroken watching.
   async function pollUntil(ctx, isDone, deadline) {
+    const maxGap = 4 * pollMs;
+    let blindReads = 0;
+    let lastReadAt = null;
+    let watchingSince = clock();
     for (;;) {
-      const view = await readPurchase(ctx);
+      const {view, reached} = await readPurchase(ctx);
+      const now = clock();
+      if (!reached || (lastReadAt !== null && now - lastReadAt > maxGap)) watchingSince = now;
+      lastReadAt = now;
       if (view) {
         logChainProgress(ctx, view);
         if (isDone(view)) return view;
       }
-      if (clock() >= deadline) return null;
+      if (reached && now >= deadline && now - watchingSince >= CATCH_UP_MS) return null;
+      blindReads = !reached && now >= deadline ? blindReads + 1 : 0;
+      if (blindReads >= MAX_BLIND_READS) throw new PaymentsError('No answer from the Payment Service');
       await sleep(pollMs);
     }
   }
 
   async function fetchResult(ctx) {
-    for (let attempt = 0; attempt < RESULT_FETCH_ATTEMPTS; attempt += 1) {
+    const giveUpAt = Math.min(clock() + RESULT_FETCH_WAIT_MS, ctx.quote.unlockTime - REFUND_MARGIN_MS - REFUND_HEADROOM_MS);
+    for (let attempt = 1; ; attempt += 1) {
       try {
         const {status, result} = await payments.getJobResult(ctx.listing, ctx.quote.jobId);
         if (status === 'completed' && typeof result === 'string') return result;
       } catch (error) {
         record(ctx, 'result.fetch_failed', {reason: error.message});
       }
+      // No text can match the on-chain hash, so a seller that withholds the result fails A1.
+      if (attempt >= RESULT_FETCH_ATTEMPTS && clock() >= giveUpAt) return '';
       await sleep(pollMs);
     }
-    // No text can match the on-chain hash, so a seller that withholds the result fails A1.
-    return '';
   }
 
   async function requestRefundUntil(ctx, latest) {
@@ -93,7 +116,7 @@ export function createHirer({
         return true;
       } catch (error) {
         record(ctx, 'refund.request_failed', {reason: error.message});
-        const view = await readPurchase(ctx);
+        const {view} = await readPurchase(ctx);
         if (view && REFUND_UNDERWAY.has(view.onChainState)) return true;
         if (clock() >= latest) return false;
       }
@@ -104,17 +127,21 @@ export function createHirer({
   async function refundFlow(ctx) {
     const latest = ctx.quote.unlockTime - REFUND_MARGIN_MS;
     const tooLate = () => record(ctx, 'refund.too_late', {reason: 'The refund window closed before the request could reach the chain'});
-    if (clock() >= latest) return tooLate();
+    if (clock() >= latest) {
+      // Look first: the money may have come back while this process was away.
+      const {view} = await readPurchase(ctx);
+      if (view) logChainProgress(ctx, view);
+      return view && (REFUND_UNDERWAY.has(view.onChainState) || isCollected(view)) ? undefined : tooLate();
+    }
     recordOnce(ctx, 'refund.pending');
     if (!(await requestRefundUntil(ctx, latest))) return tooLate();
-    const view = await pollUntil(ctx, (current) => isConfirmed(current, 'RefundWithdrawn'), ctx.quote.externalDisputeUnlockTime);
+    const view = await pollUntil(ctx, (current) => isConfirmed(current, 'RefundWithdrawn'), ctx.quote.externalDisputeUnlockTime).catch(() => null);
     if (!view) record(ctx, 'refund.stuck', {reason: 'No money back by the external dispute time; it stays counted as locked'});
     return undefined;
   }
 
   async function watchSettlement(ctx) {
-    const collected = (view) => isConfirmed(view, 'Withdrawn') || isConfirmed(view, 'DisputedWithdrawn');
-    const view = await pollUntil(ctx, collected, ctx.quote.unlockTime + COLLECT_WAIT_MS);
+    const view = await pollUntil(ctx, isCollected, ctx.quote.unlockTime + COLLECT_WAIT_MS).catch(() => null);
     if (!view) record(ctx, 'settlement.pending', {reason: 'The seller has not collected yet; do not report this payment as settled'});
   }
 
@@ -141,7 +168,7 @@ export function createHirer({
     const reason = 'SELLER_NO_SHOW: no result by the deadline';
     recordOnce(ctx, 'acceptance.failed', {reason});
     const refunded = (view) => isConfirmed(view, 'RefundWithdrawn');
-    const watch = pollUntil(ctx, refunded, ctx.quote.submitResultTime + NODE_REFUND_WAIT_MS).then((view) => {
+    const watch = pollUntil(ctx, refunded, ctx.quote.submitResultTime + NODE_REFUND_WAIT_MS).catch(() => null).then((view) => {
       if (!view) record(ctx, 'refund.stuck', {reason: 'The node has not refunded the no-show yet'});
     });
     return {status: 'failed', subtask: ctx.subtask, reason, watch};
@@ -149,8 +176,12 @@ export function createHirer({
 
   async function followPurchase(ctx) {
     const hasResult = (view) => isConfirmed(view, 'ResultSubmitted') && view.resultHash !== null;
-    const view = await pollUntil(ctx, hasResult, ctx.quote.submitResultTime + RESULT_GRACE_MS);
-    return view ? judge(ctx, view) : sellerNoShow(ctx);
+    try {
+      const view = await pollUntil(ctx, hasResult, ctx.quote.submitResultTime + RESULT_GRACE_MS);
+      return view ? judge(ctx, view) : sellerNoShow(ctx);
+    } catch (error) {
+      return {status: 'stopped', reason: error.message};
+    }
   }
 
   const notBought = (bought) =>

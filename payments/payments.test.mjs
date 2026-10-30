@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createMockPayments} from './mock.mjs';
-import {createPayments, listingFromAsset} from './payments.mjs';
+import {createPayments} from './payments.mjs';
+import {listingFromAsset} from '../registry/listing.mjs';
 import {USDM_UNIT} from '../shared/constants.mjs';
 import {PaymentsError} from '../shared/errors.mjs';
 import {inputHash} from '../shared/hash.mjs';
@@ -71,7 +72,7 @@ const RAW_PURCHASE = Object.freeze({
   WithdrawnForSeller: [],
 });
 
-async function setup(t, {mps = () => success(RAW_PURCHASE), agent = () => ({body: {}}), blockfrost = () => ({body: []}), knownAgentIds} = {}) {
+async function setup(t, {mps = () => success(RAW_PURCHASE), agent = () => ({body: {}}), blockfrost = () => ({body: []})} = {}) {
   const seen = {mps: [], agent: [], blockfrost: []};
   const record = (name, handler) => (request) => {
     seen[name].push(request);
@@ -80,7 +81,7 @@ async function setup(t, {mps = () => success(RAW_PURCHASE), agent = () => ({body
   const mpsUrl = await serve(t, record('mps', mps));
   const agentUrl = await serve(t, record('agent', agent));
   const blockfrostUrl = await serve(t, record('blockfrost', blockfrost));
-  const payments = createPayments({mpsUrl, token: 'buyer-token', blockfrostUrl, blockfrostKey: 'bf-key', knownAgentIds});
+  const payments = createPayments({mpsUrl, token: 'buyer-token', blockfrostUrl, blockfrostKey: 'bf-key'});
   return {payments, seen, listing: {apiBaseUrl: agentUrl}};
 }
 
@@ -164,54 +165,40 @@ const registry = (pages, metadataFor = () => metadataOf()) => ({url}) => {
   return metadata === undefined ? {status: 404, body: {message: 'not found'}} : {body: {asset: id, onchain_metadata: metadata}};
 };
 
-test('listAgents reads the registry from Blockfrost with the project key', async (t) => {
+test('listAgents reads the agents it is asked for with the project key, and no others', async (t) => {
   const {payments, seen} = await setup(t, {blockfrost: registry([[{asset: assetId(1), quantity: '1'}]])});
 
-  const listings = await payments.listAgents();
+  const listings = await payments.listAgents([assetId(9)]);
 
-  assert.deepEqual(listings.map((item) => item.agentIdentifier), [assetId(1)]);
+  assert.deepEqual(listings.map((item) => item.agentIdentifier), [assetId(9)]);
   assert.equal(seen.blockfrost[0].headers.project_id, 'bf-key');
-  assert.match(seen.blockfrost[0].url, /order=desc/);
+  assert.equal(seen.blockfrost.some(({url}) => url.startsWith(POLICY_PATH)), false);
 });
 
-test('listAgents skips burned assets and assets it cannot use', async (t) => {
-  const pages = [[{asset: assetId(1), quantity: '1'}, {asset: assetId(2), quantity: '0'}, {asset: assetId(3), quantity: '1'}]];
-  const {payments, seen} = await setup(t, {blockfrost: registry(pages, (id) => (id === assetId(3) ? null : metadataOf()))});
+test('an agent however old is read like a new one, because no page limit stands in the way', async (t) => {
+  const {payments} = await setup(t, {blockfrost: registry([[]])});
 
-  const listings = await payments.listAgents();
+  const listings = await payments.listAgents([assetId(1), assetId(1), assetId(2)]);
 
-  assert.deepEqual(listings.map((item) => item.agentIdentifier), [assetId(1)]);
-  assert.equal(seen.blockfrost.some(({url}) => url.endsWith(assetId(2))), false);
+  assert.deepEqual(listings.map((item) => item.agentIdentifier).sort(), [assetId(1), assetId(2)].sort());
 });
 
-test('listAgents reads further pages only while they are full', async (t) => {
-  const full = Array.from({length: 100}, (_, index) => ({asset: assetId(index), quantity: '0'}));
-  const {payments, seen} = await setup(t, {blockfrost: registry([full, [{asset: assetId(500), quantity: '1'}], [{asset: assetId(501), quantity: '1'}]])});
+test('an agent that does not exist or that it cannot use is left out, not an error', async (t) => {
+  const {payments} = await setup(t, {blockfrost: registry([[]], (id) => (id === assetId(3) ? null : undefined))});
 
-  const listings = await payments.listAgents();
-
-  assert.deepEqual(listings.map((item) => item.agentIdentifier), [assetId(500)]);
-  assert.equal(seen.blockfrost.filter(({url}) => url.startsWith(POLICY_PATH)).length, 2);
+  assert.deepEqual(await payments.listAgents([assetId(3), assetId(9)]), []);
 });
 
-test('listAgents always includes the agents it was told about, however far back they are', async (t) => {
-  const {payments} = await setup(t, {knownAgentIds: [assetId(9)], blockfrost: registry([[{asset: assetId(1), quantity: '1'}]])});
+test('a burned agent is left out', async (t) => {
+  const {payments} = await setup(t, {blockfrost: () => ({body: {asset: assetId(1), quantity: '0', onchain_metadata: metadataOf()}})});
 
-  const listings = await payments.listAgents();
-
-  assert.deepEqual(listings.map((item) => item.agentIdentifier).sort(), [assetId(1), assetId(9)].sort());
-});
-
-test('a known agent that does not exist is left out, not an error', async (t) => {
-  const {payments} = await setup(t, {knownAgentIds: [assetId(9)], blockfrost: registry([[]], () => undefined)});
-
-  assert.deepEqual(await payments.listAgents(), []);
+  assert.deepEqual(await payments.listAgents([assetId(1)]), []);
 });
 
 test('a Blockfrost failure carries its status', async (t) => {
   const {payments} = await setup(t, {blockfrost: () => ({status: 403, body: {message: 'bad key'}})});
 
-  await rejectsWith(payments.listAgents(), {status: 403, kind: 'rejected', message: /403/});
+  await rejectsWith(payments.listAgents([assetId(1)]), {status: 403, kind: 'rejected', message: /403/});
 });
 
 test('startJob sends the job as the single prompt and maps the answer to a quote', async (t) => {

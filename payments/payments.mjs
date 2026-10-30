@@ -1,49 +1,18 @@
-import {NETWORK, REGISTRY_POLICY} from '../shared/constants.mjs';
+import {NETWORK} from '../shared/constants.mjs';
 import {PaymentsError} from '../shared/errors.mjs';
-import {Listing, jobPrompt, purchaseViewFrom, quoteFromStartJob} from '../shared/schemas.mjs';
+import {mapLimited} from '../shared/map-limited.mjs';
+import {jobPrompt, purchaseViewFrom, quoteFromStartJob} from '../shared/schemas.mjs';
+import {listingFromAsset} from '../registry/listing.mjs';
 import {createMps} from '../specialists/mps.mjs';
 
 // The real payment client: the same six functions as mock.mjs, with the same return shapes.
 // Purchases go through our Payment Service, the seller's API is called directly, and the
-// registry is read from Blockfrost, because the service only lists its own agents.
+// asked-for agents are read from Blockfrost, because the service only lists its own agents.
+// For every agent in the registries, see registry/catalog.mjs.
 
 const BLOCKFROST_URL = 'https://cardano-preprod.blockfrost.io/api/v0';
 const REQUEST_TIMEOUT_MS = 30_000;
-const PAGE_SIZE = 100;
-const MAX_PAGES = 3;
 const METADATA_CONCURRENCY = 8;
-const PAYMENT_SOURCE_TYPE_V2 = 'Web3CardanoV2';
-
-// Cardano metadata strings hold at most 64 bytes, so long ones arrive as lists of chunks.
-const joined = (value) => (Array.isArray(value) ? value.join('') : value ?? '');
-
-const isOurSource = (source) =>
-  joined(source?.chain) === 'Cardano' && joined(source?.network) === NETWORK && joined(source?.settlement?.paymentSourceType) === PAYMENT_SOURCE_TYPE_V2;
-
-function priceOf({pricingType, fixed}) {
-  if (pricingType !== 'Fixed' || !fixed?.[0]) return null;
-  const asset = joined(fixed[0].asset);
-  return {unit: asset === 'lovelace' ? '' : asset, amount: String(fixed[0].amount)};
-}
-
-// Null for anything we cannot hire: an old format, another network, no address to call.
-export function listingFromAsset(agentIdentifier, metadata) {
-  const sources = metadata?.supported_payment_sources;
-  if (!Array.isArray(sources)) return null;
-  const index = sources.findIndex(isOurSource);
-  if (index < 0) return null;
-  const {pricing = {}} = sources[index];
-  const parsed = Listing.safeParse({
-    agentIdentifier,
-    name: joined(metadata.name),
-    apiBaseUrl: joined(metadata.api_base_url),
-    pricingType: pricing.pricingType,
-    price: priceOf(pricing),
-    supportedPaymentSourceIndex: index,
-    tags: (metadata.tags ?? []).map(joined),
-  });
-  return parsed.success ? parsed.data : null;
-}
 
 async function readJson(response) {
   try {
@@ -66,14 +35,6 @@ async function getJson(url, init, describeError) {
   return data;
 }
 
-async function mapLimited(items, limit, work) {
-  const results = [];
-  for (let start = 0; start < items.length; start += limit) {
-    results.push(...(await Promise.all(items.slice(start, start + limit).map(work))));
-  }
-  return results;
-}
-
 export const orderBody = (quote, metadata, amounts, network = NETWORK) => ({
   blockchainIdentifier: quote.blockchainIdentifier,
   network,
@@ -91,27 +52,17 @@ export const orderBody = (quote, metadata, amounts, network = NETWORK) => ({
   metadata: JSON.stringify(metadata),
 });
 
-export function createPayments({mpsUrl, token, blockfrostKey, blockfrostUrl = BLOCKFROST_URL, knownAgentIds = []}) {
+export function createPayments({mpsUrl, token, blockfrostKey, blockfrostUrl = BLOCKFROST_URL}) {
   const mps = createMps({baseUrl: mpsUrl, token});
   if (!blockfrostKey) throw new Error('Set BLOCKFROST_API_KEY_PREPROD');
 
   const blockfrost = (path) =>
     getJson(`${blockfrostUrl}${path}`, {headers: {project_id: blockfrostKey}}, (data) => data?.message ?? 'no message');
 
-  async function livingAssets() {
-    const assets = [];
-    for (let page = 1; page <= MAX_PAGES; page += 1) {
-      const items = await blockfrost(`/assets/policy/${REGISTRY_POLICY}?count=${PAGE_SIZE}&order=desc&page=${page}`);
-      assets.push(...items.filter(({quantity}) => quantity !== '0').map(({asset}) => asset));
-      if (items.length < PAGE_SIZE) break;
-    }
-    return assets;
-  }
-
   async function listingOf(agentIdentifier) {
     try {
-      const {onchain_metadata: metadata} = await blockfrost(`/assets/${agentIdentifier}`);
-      return listingFromAsset(agentIdentifier, metadata);
+      const {onchain_metadata: metadata, quantity} = await blockfrost(`/assets/${agentIdentifier}`);
+      return quantity === '0' ? null : listingFromAsset(agentIdentifier, metadata);
     } catch (error) {
       if (error.kind === 'not-found') return null;
       throw error;
@@ -122,9 +73,9 @@ export function createPayments({mpsUrl, token, blockfrostKey, blockfrostUrl = BL
   const sellerError = (data) => data?.error ?? 'no message';
 
   return {
-    async listAgents() {
-      const ids = [...new Set([...knownAgentIds, ...(await livingAssets())])];
-      const listings = await mapLimited(ids, METADATA_CONCURRENCY, listingOf);
+    // A run reads exactly the agents on its mandate, however long ago they registered.
+    async listAgents(agentIdentifiers = []) {
+      const listings = await mapLimited([...new Set(agentIdentifiers)], METADATA_CONCURRENCY, listingOf);
       return listings.filter(Boolean);
     },
 

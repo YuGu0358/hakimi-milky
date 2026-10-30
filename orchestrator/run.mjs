@@ -73,7 +73,14 @@ export async function orchestrate({
   // Anyone can register, so names in the registry are text written by strangers. The planner
   // reads them, and it has no reason to see an agent the owner did not put on the list.
   const isAllowlisted = ({agentIdentifier}) => mandate.allowlist.some((entry) => entry.agentIdentifier === agentIdentifier);
-  const registered = (await payments.listAgents()).filter(isAllowlisted);
+  const onTheList = mandate.allowlist.map(({agentIdentifier}) => agentIdentifier);
+  const registered = (await payments.listAgents(onTheList)).filter(isAllowlisted);
+  const hasNamed = (agentIdentifier) => ledger.lines().some((line) => line.step === 'agent.unavailable' && line.detail?.agentIdentifier === agentIdentifier);
+  onTheList
+    .filter((id) => !registered.some(({agentIdentifier}) => agentIdentifier === id) && !hasNamed(id))
+    .forEach((agentIdentifier) =>
+      ledger.append({step: 'agent.unavailable', reason: 'On the list, but the registry has no hireable listing for it', detail: {agentIdentifier}}),
+    );
   const currentListings = () => {
     const localRecords = recordsFromLedger(ledger.state());
     return registered.map((listing) => withTrackRecord(listing, trackRecords, localRecords));

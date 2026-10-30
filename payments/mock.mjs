@@ -104,8 +104,9 @@ export function createMockPayments({faults = {}, clock = Date.now} = {}) {
   };
 
   return {
-    async listAgents() {
-      return agents.map((agent) => Listing.parse(agent));
+    async listAgents(agentIdentifiers) {
+      const asked = agentIdentifiers ? agents.filter(({agentIdentifier}) => agentIdentifiers.includes(agentIdentifier)) : agents;
+      return asked.map((agent) => Listing.parse(agent));
     },
 
     async startJob(agent, job, nonce) {

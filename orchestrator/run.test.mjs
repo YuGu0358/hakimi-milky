@@ -394,6 +394,207 @@ test('when the refund window has closed it says so instead of pretending', async
   assert.equal(linesOf(ledger, 'refund.pending').length, 0);
 });
 
+const pastDeadline = (world, quote) => quote.submitResultTime + 3 * MINUTE_MS - world.clock();
+
+// One read fails while the machine sleeps past the seller's deadline, then the service answers again.
+function sleepThroughDeadline({staleAnswers = 0} = {}) {
+  let handle;
+  let quote;
+  let slept = false;
+  let saved;
+  let stale = staleAnswers;
+  const wrap = (payments, {advance}) => ({
+    ...payments,
+    startJob: async (...args) => {
+      const started = await payments.startJob(...args);
+      quote ??= started;
+      return started;
+    },
+    getPurchase: async (id) => {
+      if (slept && stale > 0) {
+        stale -= 1;
+        return saved;
+      }
+      const view = await payments.getPurchase(id);
+      if (!slept && view.onChainState === 'FundsLocked') {
+        slept = true;
+        saved = view;
+        advance(pastDeadline(handle, quote));
+        throw new PaymentsError('fetch failed');
+      }
+      return view;
+    },
+  });
+  return {wrap, attach: (world) => (handle = world)};
+}
+
+test('a read that fails past the deadline is not a no-show: the machine may have slept', async () => {
+  const outage = sleepThroughDeadline();
+  const made = world({script: happyScript, wrap: outage.wrap});
+  outage.attach(made);
+
+  const result = await made.go();
+
+  assert.equal(result.ok, true);
+  assert.equal(linesOf(made.ledger, 'acceptance.failed').length, 0);
+  assert.equal(made.calls.purchase.length, 2);
+});
+
+test('the first answers after a gap do not decide, because the service may still be catching up', async () => {
+  const outage = sleepThroughDeadline({staleAnswers: 7});
+  const made = world({script: happyScript, wrap: outage.wrap});
+  outage.attach(made);
+
+  const result = await made.go();
+
+  assert.equal(result.ok, true);
+  assert.equal(linesOf(made.ledger, 'acceptance.failed').length, 0);
+  assert.equal(made.calls.purchase.length, 2);
+});
+
+test('a service that never answers again stops the run without calling the seller a no-show', async () => {
+  let locked = false;
+  const {go, ledger} = world({
+    script: happyScript,
+    wrap: (payments) => ({
+      ...payments,
+      getPurchase: async (id) => {
+        if (locked) throw new PaymentsError('fetch failed');
+        const view = await payments.getPurchase(id);
+        locked = view.onChainState === 'FundsLocked';
+        return view;
+      },
+    }),
+  });
+
+  const result = await go();
+
+  assert.equal(result.ok, false);
+  assert.equal(result.ownerMustDecide, false);
+  assert.equal(linesOf(ledger, 'acceptance.failed').length, 0);
+});
+
+test('a service that dies after the check leaves the delivery standing and the payment unsettled', async () => {
+  let results = 0;
+  const {go, ledger} = world({
+    script: happyScript,
+    wrap: (payments) => ({
+      ...payments,
+      getJobResult: async (...args) => {
+        const answer = await payments.getJobResult(...args);
+        results += 1;
+        return answer;
+      },
+      getPurchase: async (id) => {
+        if (results >= 2) throw new PaymentsError('fetch failed');
+        return payments.getPurchase(id);
+      },
+    }),
+  });
+
+  const result = await go();
+  await result.settled;
+
+  assert.equal(result.ok, true);
+  assert.ok(linesOf(ledger, 'settlement.pending').length >= 1);
+});
+
+test('a window that closed while the money already came back is not reported as too late', async () => {
+  let late = false;
+  const {go, ledger} = world({
+    faults: {dropRows: 2},
+    script: {normalize: [propose(cheap, 'normalize')], copy: [propose(copy, 'copy')]},
+    wrap: (payments, {advance}) => ({
+      ...payments,
+      getJobResult: async (agent, jobId) => {
+        advance(31 * MINUTE_MS);
+        late = true;
+        return payments.getJobResult(agent, jobId);
+      },
+      getPurchase: async (id) => {
+        const view = await payments.getPurchase(id);
+        if (!late) return view;
+        return {...view, onChainState: 'RefundWithdrawn', current: {txHash: 'tx-back', status: 'Confirmed', newOnChainState: 'RefundWithdrawn'}};
+      },
+    }),
+  });
+
+  await go();
+
+  assert.equal(linesOf(ledger, 'refund.too_late').length, 0);
+  assert.ok(linesOf(ledger, 'refund.withdrawn').length >= 1);
+});
+
+test('a seller that restarts for a minute is not refunded for it', async () => {
+  let failures = 6;
+  const {go, ledger} = world({
+    script: happyScript,
+    wrap: (payments) => ({
+      ...payments,
+      getJobResult: async (...args) => {
+        if (failures > 0) {
+          failures -= 1;
+          throw new PaymentsError('connection refused');
+        }
+        return payments.getJobResult(...args);
+      },
+    }),
+  });
+
+  const result = await go();
+
+  assert.equal(result.ok, true);
+  assert.equal(linesOf(ledger, 'refund.pending').length, 0);
+});
+
+test('a seller that stays away still gets refunded while there is time to ask', async () => {
+  const {go, ledger} = world({
+    script: {normalize: [propose(cheap, 'normalize')], copy: [propose(copy, 'copy')]},
+    wrap: (payments) => ({
+      ...payments,
+      getJobResult: async () => {
+        throw new PaymentsError('connection refused');
+      },
+    }),
+  });
+
+  await go();
+
+  assert.ok(linesOf(ledger, 'refund.pending').length >= 1);
+  assert.equal(linesOf(ledger, 'refund.too_late').length, 0);
+});
+
+test('an agent on the list that cannot be hired any more is named in the evidence, not dropped silently', async () => {
+  const {go, ledger} = world({
+    script: happyScript,
+    wrap: (payments) => ({...payments, listAgents: async () => (await payments.listAgents()).filter(({agentIdentifier}) => agentIdentifier !== standard.agentIdentifier)}),
+  });
+
+  await go();
+
+  const [line, ...rest] = linesOf(ledger, 'agent.unavailable');
+  assert.equal(rest.length, 0);
+  assert.equal(line.detail.agentIdentifier, standard.agentIdentifier);
+});
+
+test('the run only asks the registry for the agents on the list', async () => {
+  let asked;
+  const {go} = world({
+    script: happyScript,
+    wrap: (payments) => ({
+      ...payments,
+      listAgents: async (ids) => {
+        asked = ids;
+        return payments.listAgents(ids);
+      },
+    }),
+  });
+
+  await go();
+
+  assert.deepEqual([...asked].sort(), agents.map(({agentIdentifier}) => agentIdentifier).sort());
+});
+
 test('when no proposal works the run fails and the owner gets no half-finished table', async () => {
   const {go, ledger, calls} = world({
     script: {normalize: Array.from({length: 9}, () => propose(stranger, 'normalize')), copy: [propose(copy, 'copy')]},

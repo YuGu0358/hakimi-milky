@@ -27,7 +27,6 @@ export function createLiveParts() {
       mpsUrl: process.env.MPS_URL,
       token: requireSavedRuntimeToken(BUYER_TOKEN_PATH),
       blockfrostKey: process.env.BLOCKFROST_API_KEY_PREPROD,
-      knownAgentIds: allowlist.map(({agentIdentifier}) => agentIdentifier),
     }),
     planner: createPlanner({generate: createGenerate()}),
     review: createReviewer(),

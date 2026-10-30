@@ -22,6 +22,7 @@ const STEP_LABELS = Object.freeze({
   'mandate.confirmed': 'Mandate fixed',
   'plan.proposed': 'Planner proposes a hire',
   'plan.rejected': 'Planner reply refused by the schema',
+  'agent.unavailable': 'An agent on the list cannot be hired',
   'proposal.checked': 'Guard checks the proposal',
   'review.checked': 'Jev reviews the proposal',
   'guard.checked': "Guard checks the seller's signed quote",

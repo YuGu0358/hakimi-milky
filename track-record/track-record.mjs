@@ -3,6 +3,7 @@ import {dirname} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {ESCROW_CONTRACT} from '../shared/constants.mjs';
 import {ALLOWLIST_PATH} from '../specialists/paths.mjs';
+import {createBlockfrostGet} from '../shared/blockfrost.mjs';
 
 // What each agent did with its past jobs, read from the escrow contract on Preprod. Only the chain
 // writes this record, so an agent cannot talk its way into a better one.
@@ -13,35 +14,14 @@ import {ALLOWLIST_PATH} from '../specialists/paths.mjs';
 export const TRACK_RECORDS_PATH = fileURLToPath(new URL('../.local/track-records.json', import.meta.url));
 const CACHE_PATH = fileURLToPath(new URL('../.local/track-record-cache.json', import.meta.url));
 
-const BLOCKFROST_URL = 'https://cardano-preprod.blockfrost.io/api/v0';
-const REQUEST_TIMEOUT_MS = 30_000;
 const PAGE_SIZE = 100;
 const FIRST_READ_LIMIT = 300;
 const PAUSE_BETWEEN_READS_MS = 300;
-const RATE_LIMITED = 429;
-const RATE_LIMIT_WAIT_MS = 3_000;
-const MAX_ATTEMPTS = 5;
 
 const AGENT_FIELD = 8; // agent_identifier in the V2 contract's Datum
 const OUTCOME_OF_ACTION = Object.freeze({0: 'completed', 3: 'refunded', 4: 'disputed'}); // Withdraw, WithdrawRefund, the dispute's end
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// The Payment Service shares this project's rate limit, so a refused call waits before it tries again.
-const createGet =
-  ({key, baseUrl = BLOCKFROST_URL}) =>
-  async (path) => {
-    for (let attempt = 1; ; attempt += 1) {
-      const response = await fetch(`${baseUrl}${path}`, {
-        headers: {project_id: key},
-        redirect: 'error',
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-      if (response.ok) return response.json();
-      if (response.status !== RATE_LIMITED || attempt >= MAX_ATTEMPTS) throw new Error(`Blockfrost ${path} answered HTTP ${response.status}`);
-      await sleep(RATE_LIMIT_WAIT_MS * attempt);
-    }
-  };
 
 // Newest first, back to the first transaction already known, because everything older was read before.
 // Only the very first read has a limit: a limit later on would leave a gap that is never read.
@@ -115,7 +95,7 @@ function writePrivateJson(path, value) {
 async function main() {
   if (!process.env.BLOCKFROST_API_KEY_PREPROD) throw new Error('Set BLOCKFROST_API_KEY_PREPROD');
   const {records, cache, transactions, newlyRead, truncated} = await buildTrackRecords({
-    get: createGet({key: process.env.BLOCKFROST_API_KEY_PREPROD}),
+    get: createBlockfrostGet({key: process.env.BLOCKFROST_API_KEY_PREPROD}),
     cache: readJsonIfThere(CACHE_PATH, {}),
     pause: () => sleep(PAUSE_BETWEEN_READS_MS),
     limit: Number(process.argv[2]) || FIRST_READ_LIMIT,
