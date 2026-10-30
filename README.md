@@ -133,6 +133,7 @@ Task `01a18cbb-ebaa-74ea-b448-d110ca18e300`, answered by the model alone, before
 | --- | --- |
 | Funds locked | [a7dedc75…](https://preprod.cardanoscan.io/transaction/a7dedc757343e821e5d40e560bbaf82c44b6e1a2e10718867c0961744a45110e) |
 | Result submitted | [96173c7e…](https://preprod.cardanoscan.io/transaction/96173c7e57e6c19ee4689d78eae78bd8dbd10ac985e1fa36133f8bbb27a11901) |
+| Seller receives 1 tUSDM; `frontdesk/settlement.mjs` matched Sokosumi's receipt, the Payment Service and the chain | [4c159b42…](https://preprod.cardanoscan.io/transaction/4c159b42b43750a56678ff914d739f9776aa420b52ce0281c88247e8d5d56557) |
 
 ### The orchestrator hiring two specialists
 
