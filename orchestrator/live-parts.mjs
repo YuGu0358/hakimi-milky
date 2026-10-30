@@ -1,5 +1,4 @@
 import {existsSync, readFileSync} from 'node:fs';
-import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createGenerate} from './llm.mjs';
 import {createPlanner} from './planner.mjs';
@@ -9,11 +8,11 @@ import {BUYER_TOKEN_PATH} from '../payments/buyer-key.mjs';
 import {createPayments} from '../payments/payments.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 import {ALLOWLIST_PATH} from '../specialists/paths.mjs';
+import {TRACK_RECORDS_PATH} from '../track-record/track-record.mjs';
 
 // The real Payment Service, the real models and the owner's list of agents, for one task on Preprod.
 
 export const EVIDENCE_DIR = fileURLToPath(new URL('../.local/', import.meta.url));
-const TRACK_RECORDS_PATH = join(EVIDENCE_DIR, 'track-records.json');
 const LIVE_POLL_MS = 15_000;
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));

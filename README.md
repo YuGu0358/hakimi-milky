@@ -85,6 +85,23 @@ npm run redteam
 
 `batch` runs 1000 generated out-of-mandate cases, 100 legal ones, each limit at the edge and one unit over, a replay and a race for one budget. It needs no network; add `-- --with-jev` to include the reviewer. `redteam` has a model write attacks on the guard and runs hand-written injection notes against the real planner. Both write a report to `.local/`.
 
+```
+npm run rejections
+```
+
+`rejections` tries three calls with the orchestrator's limited key against the real Payment Service: an order above its credit, a seller's payment request and an order on Mainnet. All three have to be refused, which shows the limit holds underneath our own guard. It lowers the key's credit for a moment, so never run it during a paid task.
+
+### Track record and evidence page
+
+```
+npm run track-record
+npm run evidence
+```
+
+`track-record` reads the last 300 transactions of the escrow contract on Preprod and counts, for each agent, the jobs it was paid for and the jobs it refunded. It writes `.local/track-records.json`, and the planner reads that on its next run. Only the chain writes this record, so an agent cannot talk its way into a better one.
+
+`evidence` builds `evidence/index.html` from the runs listed in `evidence/runs.json`.
+
 ### Keeping everything online
 
 ```
@@ -112,22 +129,23 @@ The second one keeps the service running. got 11, which the Blockfrost client us
 
 ## What has run on Preprod
 
-All of this used test tokens, and every agent we hired is our own.
+All of this used test tokens, and every agent we hired is our own. `evidence/index.html` shows the runs step by step, built from the raw records in `evidence/runs/`.
 
-### A paid task through Sokosumi, with the front desk hiring
+### A paid task in the TUM workspace, with the front desk hiring
 
-Task `01a18cf5-3d8c-73a0-a77d-ca9260026438` for Coworker `01a189e8-8258-707e-97c5-c06718385eb7`, with a 20-row table. The owner paid 1 tUSDM into escrow. The front desk hired the cheap normalizer and the copywriter for 0.4 tUSDM, checked both results and delivered 5.4 minutes after it started the task. The text posted on Sokosumi hashes to the result hash on chain. The owner's payment unlocks at 15:18, so the seller's receipt is still to come.
+This is the paid job for the Cardano track. Task `01a18d23-4f8f-77a8-b71f-35843d6000ae` for Coworker `01a189e8-8258-707e-97c5-c06718385eb7`, in the TUM-Hackathon workspace, with a 20-row table. The owner paid 1 tUSDM into escrow. The front desk hired the cheap normalizer and the copywriter for 0.4 tUSDM, checked both results and delivered 7.2 minutes after it started the task. The text posted on Sokosumi hashes to the result hash on chain.
 
 | Step | Transaction |
 | --- | --- |
-| Owner's 1 tUSDM locked | [7ddfbe9b…](https://preprod.cardanoscan.io/transaction/7ddfbe9b519672da47e620bf6afa7bf1ed8643db308765b3274512414a91c1b7) |
-| Both hires locked in one transaction | [00262571…](https://preprod.cardanoscan.io/transaction/002625711ab8e26ea5fa6ef8b51e64a705ec2a1a758748ea01d548e1a4b64774) |
-| Both specialists' results | [bcae759d…](https://preprod.cardanoscan.io/transaction/bcae759ddc1b1a34c25461c74428d2b20fbdab5a05b496d473efe0207a4b29d7) |
-| Front desk's result to the owner | [6831d941…](https://preprod.cardanoscan.io/transaction/6831d94105ca84be3716ccacab2e0998babc78c5982c76266d0a68cfaf3e0d52) |
+| Owner's 1 tUSDM locked | [a2bed83f…](https://preprod.cardanoscan.io/transaction/a2bed83f8722f0a1989524fbe9872dcd026e830e3d768a018ff88e8b9b85c0ce) |
+| Both hires locked in one transaction | [40a42068…](https://preprod.cardanoscan.io/transaction/40a4206832c1ad868919d8805e3bbb902fc5c3c64ffdfab5c4db3012186f3107) |
+| Table result | [e1c38c65…](https://preprod.cardanoscan.io/transaction/e1c38c65a5b42f4d9b160b11803800183d2a7b513bb58b270810f31125a2c2cd) |
+| Product texts result | [50b75cff…](https://preprod.cardanoscan.io/transaction/50b75cff9d025eecfc068f8b134ceda06ae77adfea2f8a0bbeea803ba11611a3) |
+| Front desk's result to the owner | [b4ba6a9f…](https://preprod.cardanoscan.io/transaction/b4ba6a9fc01ab4a12e9efbf72ce09aedea66624c6d6903626d1aeb8c412206fc) |
 
-### The first paid task through Sokosumi
+### Earlier paid tasks in a personal workspace
 
-Task `01a18cbb-ebaa-74ea-b448-d110ca18e300`, answered by the model alone, before the front desk could hire. Both paid tasks ran in a personal workspace, because the TUM workspace had no credits when we tried.
+The same path ran first in a personal workspace, because the TUM workspace had no credits at the time. Task `01a18cf5-3d8c-73a0-a77d-ca9260026438` also hired two specialists: [locked](https://preprod.cardanoscan.io/transaction/7ddfbe9b519672da47e620bf6afa7bf1ed8643db308765b3274512414a91c1b7), [result](https://preprod.cardanoscan.io/transaction/6831d94105ca84be3716ccacab2e0998babc78c5982c76266d0a68cfaf3e0d52). Task `01a18cbb-ebaa-74ea-b448-d110ca18e300` was answered by the model alone, before the front desk could hire:
 
 | Step | Transaction |
 | --- | --- |
@@ -177,7 +195,7 @@ One paid hire of the cheap agent, with `npm run probe:c2`, before the orchestrat
 
 ## Platforms
 
-CI runs every test on macOS and Windows, including starting a specialist agent as its own process. The Preprod run above was on macOS. The Payment Service has not been installed on Windows.
+CI runs every test on macOS and Windows, including starting a specialist agent as its own process. Every Preprod run above was on macOS. The Payment Service has not been installed on Windows, so the paid flow has not run there.
 
 ## Demo limits
 

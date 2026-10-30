@@ -74,6 +74,23 @@ async function mapLimited(items, limit, work) {
   return results;
 }
 
+export const orderBody = (quote, metadata, amounts, network = NETWORK) => ({
+  blockchainIdentifier: quote.blockchainIdentifier,
+  network,
+  paymentSourceType: quote.paymentSourceType,
+  supportedPaymentSourceIndex: quote.supportedPaymentSourceIndex,
+  inputHash: quote.inputHash,
+  sellerVkey: quote.sellerVkey,
+  agentIdentifier: quote.agentIdentifier,
+  Amounts: amounts,
+  payByTime: String(quote.payByTime),
+  submitResultTime: String(quote.submitResultTime),
+  unlockTime: String(quote.unlockTime),
+  externalDisputeUnlockTime: String(quote.externalDisputeUnlockTime),
+  identifierFromPurchaser: quote.identifierFromPurchaser,
+  metadata: JSON.stringify(metadata),
+});
+
 export function createPayments({mpsUrl, token, blockfrostKey, blockfrostUrl = BLOCKFROST_URL, knownAgentIds = []}) {
   const mps = createMps({baseUrl: mpsUrl, token});
   if (!blockfrostKey) throw new Error('Set BLOCKFROST_API_KEY_PREPROD');
@@ -127,23 +144,8 @@ export function createPayments({mpsUrl, token, blockfrostKey, blockfrostUrl = BL
 
     async purchase(quote, metadata, amounts) {
       try {
-        const order = await mps('/purchase', {
-          blockchainIdentifier: quote.blockchainIdentifier,
-          network: NETWORK,
-          paymentSourceType: quote.paymentSourceType,
-          supportedPaymentSourceIndex: quote.supportedPaymentSourceIndex,
-          inputHash: quote.inputHash,
-          sellerVkey: quote.sellerVkey,
-          agentIdentifier: quote.agentIdentifier,
-          Amounts: amounts,
-          payByTime: String(quote.payByTime),
-          submitResultTime: String(quote.submitResultTime),
-          unlockTime: String(quote.unlockTime),
-          externalDisputeUnlockTime: String(quote.externalDisputeUnlockTime),
-          identifierFromPurchaser: quote.identifierFromPurchaser,
-          metadata: JSON.stringify(metadata),
-        });
-        return {id: order.id, blockchainIdentifier: quote.blockchainIdentifier, nextAction: order.NextAction?.requestedAction ?? null, existed: false};
+        const order = await mps('/purchase', orderBody(quote, metadata, amounts));
+        return{id: order.id, blockchainIdentifier: quote.blockchainIdentifier, nextAction: order.NextAction?.requestedAction ?? null, existed: false};
       } catch (error) {
         if (error.kind === 'conflict') return {id: null, blockchainIdentifier: quote.blockchainIdentifier, nextAction: null, existed: true};
         throw error;

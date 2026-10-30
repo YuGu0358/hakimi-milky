@@ -6,13 +6,16 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\" \"specialists/**/*.test.mjs\" \"ops/**/*.test.mjs\"",
+    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\" \"specialists/**/*.test.mjs\" \"ops/**/*.test.mjs\" \"track-record/**/*.test.mjs\" \"evidence/**/*.test.mjs\"",
     "offline": "node --env-file-if-exists=.env orchestrator/run-offline.mjs",
     "live": "node --env-file-if-exists=.env orchestrator/run-live.mjs",
     "batch": "node --env-file-if-exists=.env orchestrator/run-batch.mjs",
     "redteam": "node --env-file-if-exists=.env orchestrator/run-redteam.mjs",
     "probe:c2": "node --env-file-if-exists=.env payments/probe-c2.mjs",
     "payments:key": "node --env-file-if-exists=.env payments/buyer-key.mjs",
+    "track-record": "node --env-file-if-exists=.env track-record/track-record.mjs",
+    "rejections": "node --env-file-if-exists=.env payments/rejections.mjs",
+    "evidence": "node evidence/evidence-page.mjs",
     "specialists": "node --env-file-if-exists=.env specialists/start.mjs",
     "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs",
     "online": "node ops/keep-online.mjs start",

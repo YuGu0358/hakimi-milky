@@ -73,23 +73,23 @@ export function createBuyerKeys({request, statePath, tokenPath}) {
     return {created: true, id: key.id};
   }
 
-  async function topUp() {
+  async function setCredit(amount) {
     const {keyId} = load();
     if (!keyId) throw new Error('There is no buyer key yet. Create it first.');
     const {ApiKeys: keys} = await request('/api-key?take=100');
     const credit = keys.find(({id}) => id === keyId)?.RemainingUsageCredits?.find(({unit}) => unit === USDM_UNIT);
     const before = credit?.amount ?? '0';
-    const difference = BigInt(RUN_LIMIT) - BigInt(before);
+    const difference = BigInt(amount) - BigInt(before);
     if (difference !== 0n) {
       await request('/api-key', {id: keyId, UsageCreditsToAddOrRemove: [{unit: USDM_UNIT, amount: String(difference)}]}, {method: 'PATCH'});
     }
-    return {before, after: RUN_LIMIT};
+    return {before, after: amount};
   }
 
-  return {ensure, topUp};
+  return {ensure, setCredit, topUp: () => setCredit(RUN_LIMIT)};
 }
 
-const savedKeys = ({baseUrl, adminKey}) =>
+export const savedKeys = ({baseUrl, adminKey}) =>
   createBuyerKeys({
     request: createMps({baseUrl, token: adminKey}),
     statePath: BUYER_STATE_PATH,
