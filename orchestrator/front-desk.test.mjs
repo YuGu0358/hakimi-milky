@@ -180,7 +180,7 @@ test('a job nobody can finish is tried a few times, then fails for good and says
 
   await assert.rejects(tryDesk(desk), (error) => {
     assert.equal(error.isFinal, true);
-    assert.match(error.message, /no proposal/);
+    assert.match(error.message, /kept failing/);
     return true;
   });
 });

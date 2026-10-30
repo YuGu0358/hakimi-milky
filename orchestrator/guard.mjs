@@ -7,6 +7,8 @@ import {inputHash} from '../shared/hash.mjs';
 const allow = () => ({ok: true});
 const deny = (rule, code, reason) => ({ok: false, rule, code, reason});
 
+const MAX_DISPUTE_PAST_LOCK_MS = 30 * 60_000;
+
 const findEntry = (mandate, agentIdentifier) =>
   mandate.allowlist.find((entry) => entry.agentIdentifier === agentIdentifier);
 const isAtomic = (amount) => typeof amount === 'string' && /^[1-9]\d*$/.test(amount);
@@ -24,6 +26,13 @@ function checkAllowlisted(mandate, agentIdentifier) {
   return findEntry(mandate, agentIdentifier)
     ? allow()
     : deny('G1', 'G1_NOT_ALLOWLISTED', `Agent ${agentIdentifier} is not on the mandate's allowlist`);
+}
+
+// A seller must not answer for another agent, or the checks made on the proposal would be about someone else.
+function checkQuoteAgent({quote, expectedAgent}) {
+  return expectedAgent && quote.agentIdentifier === expectedAgent
+    ? allow()
+    : deny('G1', 'G1_QUOTE_AGENT_MISMATCH', 'The quote names a different agent than the one proposed');
 }
 
 function checkSellerKey({mandate, quote}) {
@@ -64,8 +73,8 @@ function checkInput({quote, prompt, nonce}) {
 }
 
 function checkTimes({mandate, quote, now}) {
-  const {payByTime, submitResultTime, unlockTime} = quote;
-  if (![payByTime, submitResultTime, unlockTime].every(Number.isFinite)) {
+  const {payByTime, submitResultTime, unlockTime, externalDisputeUnlockTime} = quote;
+  if (![payByTime, submitResultTime, unlockTime, externalDisputeUnlockTime].every(Number.isFinite)) {
     return deny('G4', 'G4_BAD_TIME', 'Quote has an unusable time');
   }
   if (payByTime <= now) return deny('G4', 'G4_PAYBY_PASSED', 'The pay-by time has already passed');
@@ -74,6 +83,10 @@ function checkTimes({mandate, quote, now}) {
   }
   if (unlockTime > mandate.lockUntil) {
     return deny('G4', 'G4_LOCKED_TOO_LONG', `Unlock time ${unlockTime} is after the lock limit ${mandate.lockUntil}`);
+  }
+  // A refund that a seller refuses stays frozen until this time, so it has an upper limit too.
+  if (externalDisputeUnlockTime > mandate.lockUntil + MAX_DISPUTE_PAST_LOCK_MS) {
+    return deny('G4', 'G4_DISPUTE_TOO_LATE', `Dispute time ${externalDisputeUnlockTime} is too far past the lock limit ${mandate.lockUntil}`);
   }
   return allow();
 }
@@ -114,6 +127,7 @@ export function guard(ctx) {
   const retry = isRetry(ctx);
   const checks = [
     () => checkAllowlisted(ctx.mandate, ctx.quote.agentIdentifier),
+    () => checkQuoteAgent(ctx),
     () => checkSellerKey(ctx),
     ...(retry ? [] : [() => checkSpend(ctx)]),
     () => checkInput(ctx),
@@ -139,6 +153,7 @@ export function checkProposal({mandate, ledger, proposal, listing}) {
       entry.role === subtask
         ? allow()
         : deny('G1', 'G1_WRONG_ROLE', `Agent ${entry.name} is allowed for ${entry.role}, not ${subtask}`),
+    () => (listing.price ? allow() : deny('G2', 'G2_NOT_FIXED_PRICE', 'Only a fixed listed price can be checked before any data leaves')),
     () => checkSpend({mandate, ledger, price: maxPrice}),
     () => checkSpend({mandate, ledger, price}),
     () =>

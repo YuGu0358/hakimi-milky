@@ -18,7 +18,10 @@ export async function reconcileRun({ledger, getPurchase}) {
         added.push(step);
       }
     } catch (error) {
-      if (error.kind !== 'not-found') failures.push({blockchainIdentifier, reason: error.message});
+      if (error.kind === 'not-found') continue;
+      // The service is down or stuck. Asking about the rest would only wait out the same timeout for each.
+      failures.push({blockchainIdentifier, reason: error.message});
+      break;
     }
   }
   return {added, failures};

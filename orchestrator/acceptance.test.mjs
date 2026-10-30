@@ -85,7 +85,7 @@ test('A4 catches a changed price and names the SKU', () => {
 });
 
 test('A4 compares by value and aligns by SKU, not by row order', () => {
-  assert.equal(checkTable(edit('HM-007', {price: '12.50'})).ok, true);
+  assert.equal(failure(checkTable(edit('HM-007', {price: '12.50'})), 'A5_PRICE').skus[0], 'HM-007');
   assert.equal(checkTable([...good].reverse()).ok, true);
 });
 

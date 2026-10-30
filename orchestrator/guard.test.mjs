@@ -56,6 +56,7 @@ const ledger = ({spent = 0n, locked = 0n, hires = 0, subtasks = {}, purchases = 
 });
 
 const ctx = (overrides = {}) => ({
+  expectedAgent: standard.agentIdentifier,
   mandate,
   ledger: ledger(),
   quote: quote(),

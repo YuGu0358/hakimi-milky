@@ -64,6 +64,7 @@ function quoteCase({agent, amount, nonce, text, payBy, submit, unlock, ledger = 
       prompt,
       nonce,
       subtask: agent.role,
+      expectedAgent: agent.agentIdentifier,
       now: T0,
     },
   };
@@ -397,7 +398,7 @@ async function runReplay() {
   const job = jobOf('normalize');
   const nonce = 'ab'.repeat(10);
   const quote = await payments.startJob(standard, job, nonce);
-  const ctx = {quote, price: standard.price, prompt: jobPrompt(job), nonce, subtask: 'normalize', proposalId: 'p-replay'};
+  const ctx = {quote, price: standard.price, prompt: jobPrompt(job), nonce, subtask: 'normalize', proposalId: 'p-replay', listing: standard};
   const attempts = 10;
   for (let attempt = 0; attempt < attempts; attempt += 1) await purchaser.buy(ctx);
   return {attempts, orders, hires: ledger.state().hires};
@@ -413,7 +414,7 @@ async function runParallel() {
   const hire = async (agent, nonce) => {
     const job = jobOf(agent.role);
     const quote = await payments.startJob(agent, job, nonce);
-    return purchaser.buy({quote, price: agent.price, prompt: jobPrompt(job), nonce, subtask: agent.role, proposalId: `p-${nonce}`});
+    return purchaser.buy({quote, price: agent.price, prompt: jobPrompt(job), nonce, subtask: agent.role, proposalId: `p-${nonce}`, listing: agent});
   };
   const results = await Promise.all([hire(standard, 'aa'.repeat(10)), hire(copy, 'bb'.repeat(10))]);
   return {attempts: results.length, passed: results.filter(({ok}) => ok).length, deniedCode: results.find(({ok}) => !ok)?.code};

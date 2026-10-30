@@ -1,7 +1,7 @@
 {
   "required_columns": ["sku", "name", "category", "unit", "price", "stock", "note"],
   "key": "sku",
-  "immutable": ["sku", "price"],
+  "immutable": ["sku", "name", "category", "unit", "price", "stock", "note"],
   "allowed_units": ["pcs", "kg", "m", "box"],
   "allowed_categories": ["milk", "tea", "topping", "syrup", "powder", "packaging", "supplies"],
   "price_positive": true,

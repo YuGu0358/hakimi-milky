@@ -41,6 +41,7 @@ function buildCopyPrompt(job, problems) {
 - at most ${maxChars} characters
 - contains the value of each of these fields, word for word: ${mustMention.join(', ')}
 - never uses any of these phrases: ${bannedPhrases.join('; ')}
+- plain text only: no links and no HTML or Markdown markup
 ${earlier}
 <table>
 ${JSON.stringify(rowsForCopy(job))}

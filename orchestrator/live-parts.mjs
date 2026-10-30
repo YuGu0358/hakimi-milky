@@ -6,6 +6,8 @@ import {createReviewer} from './reviewer.mjs';
 import {requireSavedRuntimeToken} from '../frontdesk/registration-config.mjs';
 import {BUYER_TOKEN_PATH} from '../payments/buyer-key.mjs';
 import {createPayments} from '../payments/payments.mjs';
+import {readPins} from '../registry/pins.mjs';
+import {createBlockfrost} from '../shared/blockfrost.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 import {ALLOWLIST_PATH} from '../specialists/paths.mjs';
 import {TRACK_RECORDS_PATH} from '../track-record/track-record.mjs';
@@ -19,6 +21,7 @@ const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
 export function createLiveParts() {
   const allowlist = readJson(ALLOWLIST_PATH);
+  const get = createBlockfrost({key: process.env.BLOCKFROST_API_KEY_PREPROD});
   return {
     directory: EVIDENCE_DIR,
     allowlist,
@@ -26,7 +29,7 @@ export function createLiveParts() {
     payments: createPayments({
       mpsUrl: process.env.MPS_URL,
       token: requireSavedRuntimeToken(BUYER_TOKEN_PATH),
-      blockfrostKey: process.env.BLOCKFROST_API_KEY_PREPROD,
+      readAgents: (agentIdentifiers) => readPins({get, agentIdentifiers}),
     }),
     planner: createPlanner({generate: createGenerate()}),
     review: createReviewer(),

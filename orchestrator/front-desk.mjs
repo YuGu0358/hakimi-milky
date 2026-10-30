@@ -1,5 +1,6 @@
 import {checkCopy, checkTable} from './acceptance.mjs';
 import {assembleRun} from './assemble.mjs';
+import {failureText as codesAndOwnerSkus} from './failure-text.mjs';
 import defaultAcceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 import {formatPrice} from '../shared/money.mjs';
 import {jobPrompt, SUBTASKS} from '../shared/schemas.mjs';
@@ -80,22 +81,15 @@ export function tableFromText(text, acceptance = defaultAcceptance) {
   return table && couldPass(table, acceptance) && fitsOneJob(table, acceptance) ? table : null;
 }
 
-const cell = (value) => String(value ?? '').replace(/\s+/g, ' ').replaceAll('|', '\\|').trim();
+// The owner may paste this into a shop, so nothing in it can act as a link or a tag.
+const cell = (value) => String(value ?? '').replace(/\s+/g, ' ').replace(/[|<>[\]]/g, '\\$&').trim();
 const tableRow = (cells) => `| ${cells.map(cell).join(' | ')} |`;
 
 const TABLE_FIELDS = Object.freeze(['sku', 'name', 'category', 'unit', 'price', 'stock', 'note', 'copy']);
 const TABLE_HEADER = Object.freeze(['SKU', 'Name', 'Category', 'Unit', 'Price', 'Stock', 'Note', 'Product text']);
 
 // Only our own codes and the SKUs in the owner's table. A seller chooses the keys it invents, and it has just been refused.
-function failureText({reason, detail}, ownerSkus) {
-  if (!detail?.failures) return reason;
-  return detail.failures
-    .map(({code, skus}) => {
-      const named = skus.filter((sku) => ownerSkus.has(sku));
-      return named.length > 0 ? `${code} (${named.join(', ')})` : code;
-    })
-    .join('; ');
-}
+const failureText = ({reason, detail}, ownerSkus) => (detail?.failures ? codesAndOwnerSkus(detail.failures, ownerSkus) : reason);
 
 function outcomeOf(lines, ownerSkus) {
   const failed = lines.find(({step}) => step === 'acceptance.failed');
@@ -165,8 +159,8 @@ export function createFrontDesk({
     const result = await run();
     // The money can take most of an hour to settle, and the owner should not wait for that.
     result.settled.then(
-      () => log(`Front desk: ${taskId} has settled`),
-      (error) => log(`Front desk: ${taskId} did not settle: ${error.message}`),
+      (open) => log(open === 0 ? `Front desk: ${taskId} has settled` : `Front desk: ${taskId} stopped watching with ${open} purchases open`),
+      (error) => log(`Front desk: ${taskId} stopped watching: ${error.message}`),
     );
     if (!result.ok) throw result.ownerMustDecide ? new JobFailed(result.reason.slice(0, MAX_REASON_CHARS)) : new Error(result.reason);
     const names = Object.fromEntries(parts.allowlist.map(({agentIdentifier, name}) => [agentIdentifier, name]));
@@ -183,7 +177,8 @@ export function createFrontDesk({
       if (error.isFinal) throw error;
       const tries = (triesUsed.get(taskId) ?? 0) + 1;
       triesUsed.set(taskId, tries);
-      if (tries >= MAX_TRIES) throw new JobFailed(error.message.slice(0, MAX_REASON_CHARS));
+      log(`Front desk: ${taskId} try ${tries} failed: ${error.message}`);
+      if (tries >= MAX_TRIES) throw new JobFailed('the hiring step kept failing');
       log(`Front desk: ${taskId} will try again: ${error.message}`);
       await sleep(RETRY_DELAY_MS);
       throw error;

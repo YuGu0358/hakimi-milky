@@ -3,7 +3,7 @@ import {dirname} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {ESCROW_CONTRACT} from '../shared/constants.mjs';
 import {ALLOWLIST_PATH} from '../specialists/paths.mjs';
-import {createBlockfrostGet} from '../shared/blockfrost.mjs';
+import {createBlockfrost} from '../shared/blockfrost.mjs';
 
 // What each agent did with its past jobs, read from the escrow contract on Preprod. Only the chain
 // writes this record, so an agent cannot talk its way into a better one.
@@ -95,7 +95,7 @@ function writePrivateJson(path, value) {
 async function main() {
   if (!process.env.BLOCKFROST_API_KEY_PREPROD) throw new Error('Set BLOCKFROST_API_KEY_PREPROD');
   const {records, cache, transactions, newlyRead, truncated} = await buildTrackRecords({
-    get: createBlockfrostGet({key: process.env.BLOCKFROST_API_KEY_PREPROD}),
+    get: createBlockfrost({key: process.env.BLOCKFROST_API_KEY_PREPROD, minGapMs: 0}),
     cache: readJsonIfThere(CACHE_PATH, {}),
     pause: () => sleep(PAUSE_BETWEEN_READS_MS),
     limit: Number(process.argv[2]) || FIRST_READ_LIMIT,

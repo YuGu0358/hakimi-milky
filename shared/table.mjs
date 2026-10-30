@@ -24,6 +24,8 @@ export function parsePrice(value) {
 }
 
 const clean = (value) => String(value ?? '').trim();
+// A blank stock is unknown, not zero. Saying 0 would tell the owner it is sold out.
+const stockOf = (value) => (clean(value) === '' ? null : Number(value));
 
 export function normalizeRow(row) {
   const unit = clean(row.unit).toLowerCase();
@@ -33,7 +35,7 @@ export function normalizeRow(row) {
     category: clean(row.category).toLowerCase(),
     unit: UNIT_ALIASES[unit] ?? unit,
     price: parsePrice(row.price),
-    stock: Number(row.stock),
+    stock: stockOf(row.stock),
     note: clean(row.note),
   };
 }

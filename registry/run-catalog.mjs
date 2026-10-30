@@ -1,7 +1,7 @@
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
-import {createBlockfrostGet} from '../shared/blockfrost.mjs';
+import {createBlockfrost} from '../shared/blockfrost.mjs';
 import {readCatalog} from './catalog.mjs';
 
 // npm run registry
@@ -27,7 +27,7 @@ async function main() {
   const cache = new Map(existsSync(CACHE_PATH) ? Object.entries(JSON.parse(readFileSync(CACHE_PATH, 'utf8'))) : []);
   try {
     const {summary, entries} = await readCatalog({
-      get: createBlockfrostGet({key: process.env.BLOCKFROST_API_KEY_PREPROD}),
+      get: createBlockfrost({key: process.env.BLOCKFROST_API_KEY_PREPROD, minGapMs: 0}),
       cache,
       pause: () => sleep(PAUSE_BETWEEN_BATCHES_MS),
     });

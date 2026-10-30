@@ -87,7 +87,7 @@ async function main() {
   const allowlist = JSON.parse(readFileSync(ALLOWLIST_PATH, 'utf8'));
   const listing = allowlist.find(({name}) => name === cheap.name);
   if (!listing) throw new Error(`${cheap.name} is not on the allowlist`);
-  const payments = createPayments({mpsUrl: process.env.MPS_URL, token, blockfrostKey: process.env.BLOCKFROST_API_KEY_PREPROD});
+  const payments = createPayments({mpsUrl: process.env.MPS_URL, token});
   const job = {kind: cheap.role, table: table.slice(0, SAMPLE_ROWS), acceptance, key: acceptance.key};
   const quote = await payments.startJob(listing, job, randomBytes(10).toString('hex'));
   const attempts = await runRejections({

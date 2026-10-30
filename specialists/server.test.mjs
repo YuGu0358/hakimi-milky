@@ -67,6 +67,7 @@ test('the buyer guard allows the quote under the demo mandate', async (t) => {
 
   const decision = guard({
     mandate,
+    expectedAgent: quote.agentIdentifier,
     ledger: deriveState([]),
     quote,
     price: {unit: USDM_UNIT, amount: PROFILES.standard.priceAmount},

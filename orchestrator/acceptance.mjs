@@ -1,5 +1,5 @@
 import {resultHash} from '../shared/hash.mjs';
-import {parsePrice} from '../shared/table.mjs';
+import {normalizeRow} from '../shared/table.mjs';
 
 // Acceptance is deterministic code with no model in it. It proves the format is right,
 // no record was lost or invented, frozen fields were not changed and the copy follows
@@ -9,7 +9,7 @@ const failure = (rule, code, detail, skus = []) => ({rule, code, detail, skus});
 const keyOf = (row, key) => String(row?.[key] ?? '').trim();
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const unique = (values) => [...new Set(values)];
-const duplicatesOf = (values) => unique(values.filter((value, index) => values.indexOf(value) !== index));
+const duplicatesOf = (values) => [...Map.groupBy(values, (value) => value)].filter(([, group]) => group.length > 1).map(([value]) => value);
 
 // A failure only when something was found, so checks can be collected in one list.
 const whenAny = (rule, code, detail, skus) => (skus.length > 0 ? [failure(rule, code, detail, skus)] : []);
@@ -46,18 +46,15 @@ function checkRowSet(rows, inputTable, key) {
   ];
 }
 
-function sameValue(a, b) {
-  const [x, y] = [parsePrice(a), parsePrice(b)];
-  if (Number.isFinite(x) && Number.isFinite(y)) return x === y;
-  return String(a ?? '').trim() === String(b ?? '').trim();
-}
+// What the shared normalizer makes of the owner's row, in the form a seller's JSON can hold it.
+const canonical = (row) => JSON.parse(JSON.stringify(normalizeRow(row)));
 
 function checkImmutable(rows, inputTable, spec) {
-  const inputByKey = new Map(inputTable.map((row) => [keyOf(row, spec.key), row]));
+  const inputByKey = new Map(inputTable.map((row) => [keyOf(row, spec.key), canonical(row)]));
   const fields = spec.immutable.filter((field) => field !== spec.key);
   const changed = rows.filter((row) => {
     const original = inputByKey.get(keyOf(row, spec.key));
-    return original && fields.some((field) => field in row && !sameValue(original[field], row[field]));
+    return original && fields.some((field) => field in row && row[field] !== original[field]);
   });
   return whenAny('A4', 'A4_IMMUTABLE_CHANGED', `These rows changed a frozen field (${fields.join(', ')})`, changed.map((row) => keyOf(row, spec.key)));
 }
@@ -66,7 +63,7 @@ function checkValues(rows, spec) {
   const keysWhere = (field, isBad) => rows.filter((row) => field in row && isBad(row[field])).map((row) => keyOf(row, spec.key));
   return [
     ...(spec.price_positive
-      ? whenAny('A5', 'A5_PRICE', 'Price must be a positive number', keysWhere('price', (price) => !(parsePrice(price) > 0)))
+      ? whenAny('A5', 'A5_PRICE', 'Price must be a positive number', keysWhere('price', (price) => typeof price !== 'number' || !(price > 0)))
       : []),
     ...whenAny('A5', 'A5_UNIT', `Unit must be one of: ${spec.allowed_units.join(', ')}`, keysWhere('unit', (unit) => !spec.allowed_units.includes(unit))),
     ...whenAny('A5', 'A5_CATEGORY', `Category must be one of: ${spec.allowed_categories.join(', ')}`, keysWhere('category', (category) => !spec.allowed_categories.includes(category))),
@@ -85,6 +82,11 @@ export function checkTable({spec, inputTable, resultText}) {
     ...checkValues(value, spec),
   ];
 }
+
+const MARKUP = /[<>]|\]\(|https?:\/\/|www\./i;
+
+// The owner's own values may hold anything. Only what the seller added around them counts as markup.
+const hasMarkup = (text, row, fields) => MARKUP.test(fields.reduce((rest, field) => rest.replaceAll(String(row[field] ?? '').trim(), ''), text));
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -110,6 +112,7 @@ export function checkCopy({spec, inputTable, resultText}) {
     ...whenAny('A6', 'A6_EXTRA', 'Copy was written for keys that are not in the table', Object.keys(value).filter((key) => !inputSet.has(key))),
     ...whenAny('A6', 'A6_TOO_LONG', `Copy must be at most ${maxChars} characters`, keysWhere((row) => textOf(row).length > maxChars)),
     ...whenAny('A6', 'A6_MISSING_ATTRIBUTE', `Copy must mention: ${mustMention.join(', ')}`, keysWhere((row) => mustMention.some((field) => !lower(textOf(row)).includes(lower(row[field]))))),
+    ...whenAny('A6', 'A6_MARKUP', 'Copy must be plain text, with no links or markup', keysWhere((row) => hasMarkup(textOf(row), row, mustMention))),
     ...whenAny('A6', 'A6_BANNED_PHRASE', `Copy must not say: ${bannedPhrases.join(', ')}`, keysWhere((row) => bannedPhrases.some((phrase) => containsPhrase(textOf(row), phrase)))),
   ];
 }

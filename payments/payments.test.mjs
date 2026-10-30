@@ -4,6 +4,8 @@ import {createServer} from 'node:http';
 import {createMockPayments} from './mock.mjs';
 import {createPayments} from './payments.mjs';
 import {listingFromAsset} from '../registry/listing.mjs';
+import {readPins} from '../registry/pins.mjs';
+import {createBlockfrost} from '../shared/blockfrost.mjs';
 import {USDM_UNIT} from '../shared/constants.mjs';
 import {PaymentsError} from '../shared/errors.mjs';
 import {inputHash} from '../shared/hash.mjs';
@@ -81,7 +83,8 @@ async function setup(t, {mps = () => success(RAW_PURCHASE), agent = () => ({body
   const mpsUrl = await serve(t, record('mps', mps));
   const agentUrl = await serve(t, record('agent', agent));
   const blockfrostUrl = await serve(t, record('blockfrost', blockfrost));
-  const payments = createPayments({mpsUrl, token: 'buyer-token', blockfrostUrl, blockfrostKey: 'bf-key'});
+  const get = createBlockfrost({key: 'bf-key', baseUrl: blockfrostUrl, minGapMs: 0, sleep: async () => {}});
+  const payments = createPayments({mpsUrl, token: 'buyer-token', readAgents: (agentIdentifiers) => readPins({get, agentIdentifiers})});
   return {payments, seen, listing: {apiBaseUrl: agentUrl}};
 }
 
@@ -201,6 +204,13 @@ test('a Blockfrost failure carries its status', async (t) => {
   await rejectsWith(payments.listAgents([assetId(1)]), {status: 403, kind: 'rejected', message: /403/});
 });
 
+test('a seller cannot fill the memory with one answer', async (t) => {
+  const huge = {status: 200, body: {result: 'x'.repeat(2 * 1024 * 1024)}};
+  const {payments, listing} = await setup(t, {agent: () => huge});
+
+  await assert.rejects(payments.getJobResult(listing, 'job-1'), /larger than/);
+});
+
 test('startJob sends the job as the single prompt and maps the answer to a quote', async (t) => {
   const prompt = jobPrompt(JOB);
   const answer = {
@@ -293,7 +303,7 @@ for (const [status, kind, message] of [
 
 test('an order whose answer is lost has an uncertain outcome', async () => {
   const port = await closedPort();
-  const payments = createPayments({mpsUrl: `http://127.0.0.1:${port}`, token: 'buyer-token', blockfrostUrl: 'http://127.0.0.1:1', blockfrostKey: 'bf-key'});
+  const payments = createPayments({mpsUrl: `http://127.0.0.1:${port}`, token: 'buyer-token'});
 
   await rejectsWith(payments.purchase(QUOTE, METADATA, AMOUNTS), {status: null, kind: 'uncertain'});
 });
@@ -379,6 +389,5 @@ test('the real client has the mock\'s six functions and the same return shapes',
 });
 
 test('missing settings fail at once', () => {
-  assert.throws(() => createPayments({mpsUrl: 'http://x', token: 't', blockfrostUrl: 'http://x'}), /BLOCKFROST/);
-  assert.throws(() => createPayments({mpsUrl: 'http://x', token: '', blockfrostKey: 'k'}), /key is missing/);
+  assert.throws(() => createPayments({mpsUrl: 'http://x', token: ''}), /key is missing/);
 });

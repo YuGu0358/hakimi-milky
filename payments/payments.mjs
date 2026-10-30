@@ -1,22 +1,30 @@
 import {NETWORK} from '../shared/constants.mjs';
 import {PaymentsError} from '../shared/errors.mjs';
-import {mapLimited} from '../shared/map-limited.mjs';
 import {jobPrompt, purchaseViewFrom, quoteFromStartJob} from '../shared/schemas.mjs';
-import {listingFromAsset} from '../registry/listing.mjs';
 import {createMps} from '../specialists/mps.mjs';
 
 // The real payment client: the same six functions as mock.mjs, with the same return shapes.
-// Purchases go through our Payment Service, the seller's API is called directly, and the
-// asked-for agents are read from Blockfrost, because the service only lists its own agents.
-// For every agent in the registries, see registry/catalog.mjs.
+// Purchases go through our Payment Service and the seller's API is called directly. Who is
+// registered comes from outside, through readAgents, so this file knows nothing about Blockfrost.
 
-const BLOCKFROST_URL = 'https://cardano-preprod.blockfrost.io/api/v0';
 const REQUEST_TIMEOUT_MS = 30_000;
-const METADATA_CONCURRENCY = 8;
+const MAX_SELLER_BODY_BYTES = 1024 * 1024;
 
-async function readJson(response) {
+// A seller chooses how much it sends, so reading stops at the limit instead of filling the memory.
+async function readLimitedText(response) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body ?? []) {
+    size += chunk.length;
+    if (size > MAX_SELLER_BODY_BYTES) throw new PaymentsError(`The answer is larger than ${MAX_SELLER_BODY_BYTES} bytes`);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function parseOrNull(text) {
   try {
-    return await response.json();
+    return JSON.parse(text);
   } catch {
     return null;
   }
@@ -30,7 +38,7 @@ async function getJson(url, init, describeError) {
   } catch (error) {
     throw new PaymentsError(`${url}: ${error.message}`);
   }
-  const data = await readJson(response);
+  const data = parseOrNull(await readLimitedText(response));
   if (!response.ok) throw new PaymentsError(`${url} answered HTTP ${response.status}: ${describeError(data)}`, {status: response.status});
   return data;
 }
@@ -52,32 +60,14 @@ export const orderBody = (quote, metadata, amounts, network = NETWORK) => ({
   metadata: JSON.stringify(metadata),
 });
 
-export function createPayments({mpsUrl, token, blockfrostKey, blockfrostUrl = BLOCKFROST_URL}) {
+export function createPayments({mpsUrl, token, readAgents = async () => []}) {
   const mps = createMps({baseUrl: mpsUrl, token});
-  if (!blockfrostKey) throw new Error('Set BLOCKFROST_API_KEY_PREPROD');
-
-  const blockfrost = (path) =>
-    getJson(`${blockfrostUrl}${path}`, {headers: {project_id: blockfrostKey}}, (data) => data?.message ?? 'no message');
-
-  async function listingOf(agentIdentifier) {
-    try {
-      const {onchain_metadata: metadata, quantity} = await blockfrost(`/assets/${agentIdentifier}`);
-      return quantity === '0' ? null : listingFromAsset(agentIdentifier, metadata);
-    } catch (error) {
-      if (error.kind === 'not-found') return null;
-      throw error;
-    }
-  }
 
   const agentUrl = ({apiBaseUrl}, path) => `${apiBaseUrl.replace(/\/$/, '')}${path}`;
   const sellerError = (data) => data?.error ?? 'no message';
 
   return {
-    // A run reads exactly the agents on its mandate, however long ago they registered.
-    async listAgents(agentIdentifiers = []) {
-      const listings = await mapLimited([...new Set(agentIdentifiers)], METADATA_CONCURRENCY, listingOf);
-      return listings.filter(Boolean);
-    },
+    listAgents: (agentIdentifiers) => readAgents(agentIdentifiers),
 
     // Never sent twice: a second try would be a second payment request at the seller.
     async startJob(agent, job, nonce) {

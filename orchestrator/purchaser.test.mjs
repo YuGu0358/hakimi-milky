@@ -61,7 +61,7 @@ const buyContext = async (payments, agent, index, subtask = 'normalize') => {
   const nonce = nonceFor(index);
   const quote = await payments.startJob(agent, job, nonce);
   const price = agent.price;
-  return {quote, price, prompt, nonce, subtask, proposalId: `p${index}`};
+  return {quote, price, prompt, nonce, subtask, proposalId: `p${index}`, listing: agent};
 };
 
 test('a clean quote is reserved, then bought, and both steps are in the evidence', async () => {

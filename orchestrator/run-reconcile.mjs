@@ -23,7 +23,6 @@ async function main(givenTaskIds) {
   const payments = createPayments({
     mpsUrl: process.env.MPS_URL,
     token: requireSavedRuntimeToken(BUYER_TOKEN_PATH),
-    blockfrostKey: process.env.BLOCKFROST_API_KEY_PREPROD,
   });
   const taskIds = givenTaskIds.length > 0 ? givenTaskIds : allTaskIds();
   let failed = 0;
