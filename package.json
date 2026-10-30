@@ -6,14 +6,17 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\" \"specialists/**/*.test.mjs\"",
+    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\" \"specialists/**/*.test.mjs\" \"ops/**/*.test.mjs\"",
     "offline": "node --env-file-if-exists=.env orchestrator/run-offline.mjs",
     "live": "node --env-file-if-exists=.env orchestrator/run-live.mjs",
     "batch": "node --env-file-if-exists=.env orchestrator/run-batch.mjs",
     "redteam": "node --env-file-if-exists=.env orchestrator/run-redteam.mjs",
     "probe:c2": "node --env-file-if-exists=.env payments/probe-c2.mjs",
     "specialists": "node --env-file-if-exists=.env specialists/start.mjs",
-    "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs"
+    "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs",
+    "online": "node ops/keep-online.mjs start",
+    "online:status": "node ops/keep-online.mjs status",
+    "online:stop": "node ops/keep-online.mjs stop"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.62",
