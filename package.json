@@ -17,6 +17,7 @@
     "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs",
     "online": "node ops/keep-online.mjs start",
     "online:status": "node ops/keep-online.mjs status",
+    "online:watch": "node ops/keep-online.mjs watch",
     "online:stop": "node ops/keep-online.mjs stop"
   },
   "dependencies": {

@@ -3,11 +3,13 @@ import {existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, write
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {acquireWorkerLock} from '../frontdesk/worker-lock.mjs';
-import {desktopNotify, isHealthy, keepAwake, projectServices, spawnLogged} from './services.mjs';
+import {STALE_AFTER_MS, renderView} from './coworker-view.mjs';
+import {coworkerInfo, desktopNotify, isHealthy, keepAwake, projectServices, readCoworkerTasks, spawnLogged} from './services.mjs';
 import {createSupervisor} from './supervisor.mjs';
 
 // npm run online          start the supervisor in the background
 // npm run online:status   what is up, and what it restarted
+// npm run online:watch    a live panel of the Coworker, its services and its tasks
 // npm run online:stop     stop it and the services it started; services started by hand keep running
 // Start it from a shell where Node 24 is on the PATH. On the Mac: source env.sh first.
 
@@ -18,8 +20,9 @@ const STATUS_PATH = join(DIRECTORY, 'status.json');
 const STOP_PATH = join(DIRECTORY, 'stop');
 const LOG_PATH = join(DIRECTORY, 'supervisor.log');
 const DEFAULT_CHECK_MS = 15_000;
-const STALE_AFTER_MS = 60_000;
-const USAGE = 'Usage: keep-online.mjs start | run | status | stop';
+const WATCH_DRAW_MS = 5_000;
+const WATCH_TASKS_MS = 30_000;
+const USAGE = 'Usage: keep-online.mjs start | run | status | watch | stop';
 
 function loadConfig() {
   const path = process.env.ONLINE_CONFIG;
@@ -83,12 +86,23 @@ function startInBackground() {
   console.log(`Supervisor started, pid ${child.pid}. Log: ${LOG_PATH}`);
 }
 
+function readStatus() {
+  if (!existsSync(STATUS_PATH) || !existsSync(LOCK_PATH)) return null;
+  try {
+    return JSON.parse(readFileSync(STATUS_PATH, 'utf8'));
+  } catch (error) {
+    stamped(`Could not read the status: ${error.message}`);
+    return null;
+  }
+}
+
 function printStatus() {
-  if (!existsSync(STATUS_PATH) || !existsSync(LOCK_PATH)) {
+  const status = readStatus();
+  if (!status) {
     console.log('The supervisor is not running.');
     return;
   }
-  const {updatedAt, services} = JSON.parse(readFileSync(STATUS_PATH, 'utf8'));
+  const {updatedAt, services} = status;
   if (Date.now() - Date.parse(updatedAt) > STALE_AFTER_MS) console.log(`The supervisor looks stuck: last update ${updatedAt}.`);
   for (const {name, mode, healthy, restarts, pid} of services) {
     console.log(`${name.padEnd(18)} ${healthy ? 'healthy' : 'NOT HEALTHY'}  ${mode.padEnd(9)} restarts: ${restarts}${pid ? `  pid: ${pid}` : ''}`);
@@ -105,7 +119,29 @@ function requestStop() {
   console.log('Stop requested.');
 }
 
-const COMMANDS = Object.freeze({run, start: startInBackground, status: printStatus, stop: requestStop});
+// A panel to leave open in a terminal. Tasks come from Sokosumi, so they refresh less often.
+function watch() {
+  const coworker = coworkerInfo();
+  let tasks = {items: []};
+  const draw = () => {
+    console.clear();
+    console.log(renderView({now: Date.now(), coworker, status: readStatus(), tasks}));
+  };
+  const refreshTasks = async () => {
+    try {
+      tasks = {items: await readCoworkerTasks(coworker)};
+    } catch (error) {
+      tasks = {...tasks, error: error.message};
+    }
+    draw();
+  };
+  draw();
+  refreshTasks();
+  setInterval(draw, WATCH_DRAW_MS);
+  setInterval(refreshTasks, WATCH_TASKS_MS);
+}
+
+const COMMANDS = Object.freeze({run, start: startInBackground, status: printStatus, stop: requestStop, watch});
 
 try {
   const command = COMMANDS[process.argv[2] ?? 'start'];

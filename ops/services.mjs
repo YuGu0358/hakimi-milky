@@ -2,7 +2,7 @@ import {exec, spawn, spawnSync} from 'node:child_process';
 import {closeSync, existsSync, openSync, readFileSync} from 'node:fs';
 import {delimiter, dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {parseEnv} from 'node:util';
+import {parseEnv, promisify} from 'node:util';
 
 // What "online" means for this project, and how to start, stop and check it on macOS and Windows.
 
@@ -12,21 +12,48 @@ const PROBE_TIMEOUT_MS = 40_000;
 const KILL_WAIT_MS = 5_000;
 const WATCH_LOGIN_EVERY_MS = 60_000;
 const SLOW_BOOT_MS = 180_000;
+const MAX_TASKS_OUTPUT_BYTES = 8 * 1024 * 1024;
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const WORKSPACE = dirname(ROOT.replace(/[\\/]$/, ''));
 
-function readCoworkerId(envPath) {
-  if (!existsSync(envPath)) return null;
-  return parseEnv(readFileSync(envPath, 'utf8')).COWORKER_ID?.trim() || null;
+const SHELL_SAFE = /^[\w-]+$/;
+
+// These values end up in a shell command, so anything but a plain identifier counts as unset.
+function readSetting(values, name) {
+  const value = values[name]?.trim();
+  return value && SHELL_SAFE.test(value) ? value : null;
+}
+
+const coworkerDirectory = (env) => env.COWORKER_DIR ?? join(WORKSPACE, 'tum-hackathon-quickstart');
+
+export function coworkerInfo(env = process.env) {
+  const dir = coworkerDirectory(env);
+  const envPath = join(dir, '.env');
+  const values = existsSync(envPath) ? parseEnv(readFileSync(envPath, 'utf8')) : {};
+  return {dir, id: readSetting(values, 'COWORKER_ID'), organizationSlug: readSetting(values, 'SOKOSUMI_ORGANIZATION_SLUG')};
+}
+
+const execAsync = promisify(exec);
+
+export async function readCoworkerTasks({dir, id, organizationSlug}) {
+  if (!id) return [];
+  const workspace = organizationSlug ? ` --organization-slug ${organizationSlug}` : '';
+  const {stdout} = await execAsync(`sokosumi --preprod tasks list --coworker-id ${id}${workspace} --json`, {
+    cwd: dir,
+    env: childEnv(),
+    timeout: PROBE_TIMEOUT_MS,
+    maxBuffer: MAX_TASKS_OUTPUT_BYTES,
+    windowsHide: true,
+  });
+  return JSON.parse(stdout).tasks;
 }
 
 // The default layout is the one on the demo machine: the two checkouts sit beside this repo.
 export function projectServices(env = process.env) {
-  const coworkerDir = env.COWORKER_DIR ?? join(WORKSPACE, 'tum-hackathon-quickstart');
+  const {dir: coworkerDir, id: coworkerId} = coworkerInfo(env);
   const mpsDir = env.MPS_DIR ?? join(WORKSPACE, 'masumi-payment-service');
   const coworkerEnv = join(coworkerDir, '.env');
-  const coworkerId = readCoworkerId(coworkerEnv);
   return [
     {
       name: 'payment-service',
