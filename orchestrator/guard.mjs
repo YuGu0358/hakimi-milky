@@ -37,8 +37,9 @@ function checkSpend({mandate, ledger, price}) {
   if (!isAtomic(price.amount)) {
     return deny('G2', 'G2_BAD_AMOUNT', `Amount ${JSON.stringify(price.amount)} is not a positive integer`);
   }
-  const budget = mandate.budget[price.unit];
-  const cap = mandate.perHire[price.unit];
+  // hasOwn, because a planner could name a unit like "constructor" that every object inherits.
+  const budget = Object.hasOwn(mandate.budget, price.unit) ? mandate.budget[price.unit] : undefined;
+  const cap = Object.hasOwn(mandate.perHire, price.unit) ? mandate.perHire[price.unit] : undefined;
   if (budget === undefined || cap === undefined) {
     return deny('G2', 'G2_UNIT_NOT_ALLOWED', `The mandate has no budget in unit ${JSON.stringify(price.unit)}`);
   }
