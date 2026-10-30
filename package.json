@@ -18,6 +18,7 @@
     "reconcile": "node --env-file-if-exists=.env orchestrator/run-reconcile.mjs",
     "crash-test": "node --env-file-if-exists=.env orchestrator/crash-test.mjs",
     "registry": "node --env-file-if-exists=.env registry/run-catalog.mjs",
+    "registry:allow": "node --env-file-if-exists=.env registry/run-allow.mjs",
     "evidence": "node evidence/evidence-page.mjs",
     "specialists": "node --env-file-if-exists=.env specialists/start.mjs",
     "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs",

@@ -1,0 +1,26 @@
+diff --git a/src/app.ts b/src/app.ts
+index 1b678fa..5675888 100644
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -405,7 +405,7 @@ export async function startApp() {
+ 			});
+ 		},
+ 		http: {
+-			listen: PORT,
++			listen: { port: PORT, host: '127.0.0.1' },
+ 		},
+ 		cors: ({ defaultHeaders }) => ({
+ 			...defaultHeaders,
+diff --git a/src/services/transactions/tx-sync/service.ts b/src/services/transactions/tx-sync/service.ts
+index b01e78e..9bfc4db 100644
+--- a/src/services/transactions/tx-sync/service.ts
++++ b/src/services/transactions/tx-sync/service.ts
+@@ -72,7 +72,7 @@ export async function checkLatestTransactions(
+ 				if (failedResults.length > 0) {
+ 					logger.error('Error updating tx data', {
+ 						error: failedResults,
+-						paymentContract: paymentContracts,
++						paymentContract: paymentContracts.map(({ id }) => id),
+ 					});
+ 				}
+ 			} catch (error) {

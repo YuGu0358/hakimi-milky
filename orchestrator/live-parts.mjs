@@ -6,6 +6,8 @@ import {createReviewer} from './reviewer.mjs';
 import {requireSavedRuntimeToken} from '../frontdesk/registration-config.mjs';
 import {BUYER_TOKEN_PATH} from '../payments/buyer-key.mjs';
 import {createPayments} from '../payments/payments.mjs';
+import {mergedAllowlist} from '../registry/allow.mjs';
+import {OWNER_PINS_PATH} from '../registry/paths.mjs';
 import {readPins} from '../registry/pins.mjs';
 import {createBlockfrost} from '../shared/blockfrost.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
@@ -20,7 +22,8 @@ const LIVE_POLL_MS = 15_000;
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
 export function createLiveParts() {
-  const allowlist = readJson(ALLOWLIST_PATH);
+  const ownerPins = existsSync(OWNER_PINS_PATH) ? readJson(OWNER_PINS_PATH) : [];
+  const allowlist = mergedAllowlist(readJson(ALLOWLIST_PATH), ownerPins);
   const get = createBlockfrost({key: process.env.BLOCKFROST_API_KEY_PREPROD});
   return {
     directory: EVIDENCE_DIR,

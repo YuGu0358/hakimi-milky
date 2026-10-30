@@ -32,6 +32,7 @@ const WIRING = new Set([
   'orchestrator/run-redteam.mjs',
   'orchestrator/run-reconcile.mjs',
   'orchestrator/crash-test.mjs',
+  'registry/run-allow.mjs',
   'orchestrator/batch.mjs',
   'payments/probe-c2.mjs',
   'payments/rejections.mjs',
