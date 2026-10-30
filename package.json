@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\" \"specialists/**/*.test.mjs\"",
     "offline": "node --env-file-if-exists=.env orchestrator/run-offline.mjs",
+    "live": "node --env-file-if-exists=.env orchestrator/run-live.mjs",
     "specialists": "node --env-file-if-exists=.env specialists/start.mjs",
     "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs"
   },
