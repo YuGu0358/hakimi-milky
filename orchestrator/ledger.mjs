@@ -25,6 +25,7 @@ const STATUS_ORDER = Object.freeze([
 ]);
 const rankOf = (status) => STATUS_ORDER.indexOf(status);
 const FINISHED = new Set(['rejected', 'withdrawn', 'refund_withdrawn']);
+const MAY_BE_REJECTED = new Set(['reserved', 'uncertain']);
 
 const STATUS_BY_STEP = Object.freeze({
   'purchase.uncertain': 'uncertain',
@@ -71,8 +72,13 @@ function applyReservation(state, line) {
 
 // The money a purchase holds moves once: back to the budget or into spent.
 function settleMoney(state, purchase, step) {
-  if (purchase.settled) return state;
   const value = BigInt(purchase.amount.value);
+  if (purchase.settled) {
+    // The chain has the last word: money that reached a seller is spent, whatever we thought before.
+    return step === 'seller.withdrawn' && purchase.status === 'rejected'
+      ? {...state, units: adjustUnits(state.units, purchase.amount.unit, {spent: value})}
+      : state;
+  }
   if (step === 'seller.withdrawn') {
     return {...state, units: adjustUnits(state.units, purchase.amount.unit, {locked: -value, spent: value})};
   }
@@ -97,6 +103,8 @@ function applyStep(state, line) {
   const id = line.refs?.blockchainIdentifier;
   const purchase = id ? state.purchases[id] : undefined;
   if (!status || !purchase) return state;
+  // A rejection only means something while the order may not exist yet.
+  if (line.step === 'purchase.rejected' && !MAY_BE_REJECTED.has(purchase.status)) return state;
   const moved = settleMoney(state, purchase, line.step);
   const subtask = moved.subtasks[purchase.subtask];
   // A newer hire may own the subtask by now. Then this line no longer speaks for it.

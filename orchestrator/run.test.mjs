@@ -72,9 +72,9 @@ function world({
         calls.startJob.push(agent.agentIdentifier);
         return base.startJob(agent, job, nonce);
       },
-      purchase: async (quote, metadata) => {
+      purchase: async (quote, metadata, amounts) => {
         calls.purchase.push(quote.agentIdentifier);
-        return base.purchase(quote, metadata);
+        return base.purchase(quote, metadata, amounts);
       },
     },
     {advance},
@@ -384,6 +384,39 @@ test('C6: crash after the order went out, the restart finds it and does not pay 
   assert.equal(result.ok, true);
   assert.equal(restarted.ledger.state().hires, 2);
   assert.equal(usage(restarted.ledger).locked, 500000n);
+  assert.equal(linesOf(restarted.ledger, 'purchase.reserved').length, 2);
+});
+
+test('C6: restart after the pay-by time with no order sent, the money is freed and the job goes on', async () => {
+  const {first} = await crashAfterReservation();
+  first.advance(9 * MINUTE_MS);
+  const restarted = world({
+    payments: first.base,
+    logPath: first.logPath,
+    clockStart: T0 + 9 * MINUTE_MS,
+    script: {normalize: [propose(standard, 'normalize')], copy: [propose(copy, 'copy')]},
+  });
+  const result = await restarted.go();
+  assert.equal(result.ok, true);
+  assert.equal(linesOf(restarted.ledger, 'purchase.rejected').length, 1);
+  assert.equal(linesOf(restarted.ledger, 'purchase.reserved').length, 3);
+  assert.equal(restarted.ledger.state().hires, 2);
+  assert.equal(usage(restarted.ledger).locked, 500000n);
+});
+
+test('C6: restart after the pay-by time with the order already placed, it keeps following that order', async () => {
+  const {first} = await crashAfterReservation({placeOrder: true});
+  first.advance(9 * MINUTE_MS);
+  const restarted = world({
+    payments: first.base,
+    logPath: first.logPath,
+    clockStart: T0 + 9 * MINUTE_MS,
+    script: {copy: [propose(copy, 'copy')]},
+  });
+  const result = await restarted.go();
+  assert.equal(result.ok, true);
+  assert.equal(linesOf(restarted.ledger, 'purchase.rejected').length, 0);
+  assert.equal(restarted.ledger.state().hires, 2);
   assert.equal(linesOf(restarted.ledger, 'purchase.reserved').length, 2);
 });
 

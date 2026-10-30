@@ -23,6 +23,8 @@ export function createPurchaser({mandate, ledger, purchase, getPurchase, clock =
     return {ok: true, created: order, retry};
   };
 
+  const alreadyThere = (ctx, retry) => created(ctx, {blockchainIdentifier: ctx.quote.blockchainIdentifier, existed: true}, retry);
+
   const rejected = (ctx, error) => {
     record(ctx, 'purchase.rejected', {reason: error.message});
     return {ok: false, rule: 'payment-service', code: 'PURCHASE_REJECTED', reason: error.message};
@@ -34,22 +36,45 @@ export function createPurchaser({mandate, ledger, purchase, getPurchase, clock =
     return {ok: false, rule: 'payment-service', code: 'PURCHASE_UNCERTAIN', reason, stop: true};
   };
 
-  const orderMetadata = ({proposalId, subtask}) => ({taskId: mandate.taskId, proposalId, subtask});
+  // Sends the amount the guard checked. The Payment Service refuses any other: for a fixed
+  // price it compares with the chain, for a dynamic one with what the seller signed.
+  const sendOrder = ({quote, price, proposalId, subtask}) =>
+    purchase(quote, {taskId: mandate.taskId, proposalId, subtask}, [{unit: price.unit, amount: price.amount}]);
 
-  // The response was lost. Look the order up first; send it again only if it is really absent,
-  // and with the same identifiers, which the Payment Service treats as the same purchase.
-  async function resolveUncertain(ctx, retry, firstError) {
-    record(ctx, 'purchase.uncertain', {reason: firstError.message});
+  // Only a response naming this order proves it exists. An empty answer does not.
+  async function lookUpOrder(ctx) {
     try {
-      await getPurchase(ctx.quote.blockchainIdentifier);
-      return created(ctx, {blockchainIdentifier: ctx.quote.blockchainIdentifier, existed: true}, retry);
-    } catch (lookupError) {
-      if (lookupError.kind !== 'not-found') return stopped(ctx, lookupError);
+      const view = await getPurchase(ctx.quote.blockchainIdentifier);
+      return {found: view?.blockchainIdentifier === ctx.quote.blockchainIdentifier};
+    } catch (error) {
+      return error.kind === 'not-found' ? {found: false} : {error};
     }
+  }
+
+  async function resend(ctx, retry) {
     try {
-      return created(ctx, await purchase(ctx.quote, orderMetadata(ctx)), retry);
-    } catch (resendError) {
-      return isDefiniteRejection(resendError) ? rejected(ctx, resendError) : stopped(ctx, resendError);
+      return created(ctx, await sendOrder(ctx), retry);
+    } catch (error) {
+      if (error.kind === 'conflict') return alreadyThere(ctx, retry);
+      return isDefiniteRejection(error) ? rejected(ctx, error) : stopped(ctx, error);
+    }
+  }
+
+  // A resend carries the same identifiers, which the Payment Service treats as the same purchase.
+  async function resolveFromLookup(ctx, retry) {
+    const {found, error} = await lookUpOrder(ctx);
+    if (error) return stopped(ctx, error);
+    return found ? alreadyThere(ctx, retry) : resend(ctx, retry);
+  }
+
+  async function placeOrder(ctx) {
+    try {
+      return created(ctx, await sendOrder(ctx), false);
+    } catch (error) {
+      if (error.kind === 'conflict') return alreadyThere(ctx, false);
+      if (isDefiniteRejection(error)) return rejected(ctx, error);
+      record(ctx, 'purchase.uncertain', {reason: error.message});
+      return resolveFromLookup(ctx, false);
     }
   }
 
@@ -63,14 +88,9 @@ export function createPurchaser({mandate, ledger, purchase, getPurchase, clock =
       reason: decision.reason,
     });
     if (!decision.ok) return decision;
-    if (!decision.retry) {
-      record(ctx, 'purchase.reserved', {amount: {unit: price.unit, value: price.amount}, terms: quote});
-    }
-    try {
-      return created(ctx, await purchase(quote, orderMetadata(ctx)), decision.retry);
-    } catch (error) {
-      return isDefiniteRejection(error) ? rejected(ctx, error) : resolveUncertain(ctx, decision.retry, error);
-    }
+    if (decision.retry) return resolveFromLookup(ctx, true);
+    record(ctx, 'purchase.reserved', {amount: {unit: price.unit, value: price.amount}, terms: quote});
+    return placeOrder(ctx);
   }
 
   return {buy: (ctx) => mutex.runExclusive(() => buyLocked(ctx))};

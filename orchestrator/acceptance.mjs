@@ -86,6 +86,12 @@ function checkTable({spec, inputTable, resultText}) {
   ];
 }
 
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Whole words only: "cures" must not catch "secures", or an honest seller gets refunded.
+const containsPhrase = (text, phrase) =>
+  new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(phrase.trim())}(?![\\p{L}\\p{N}])`, 'iu').test(text);
+
 function checkCopy({spec, inputTable, resultText}) {
   const {value, error} = parseJson(resultText);
   if (error || !isPlainObject(value)) {
@@ -104,7 +110,7 @@ function checkCopy({spec, inputTable, resultText}) {
     ...whenAny('A6', 'A6_EXTRA', 'Copy was written for keys that are not in the table', Object.keys(value).filter((key) => !inputSet.has(key))),
     ...whenAny('A6', 'A6_TOO_LONG', `Copy must be at most ${maxChars} characters`, keysWhere((row) => textOf(row).length > maxChars)),
     ...whenAny('A6', 'A6_MISSING_ATTRIBUTE', `Copy must mention: ${mustMention.join(', ')}`, keysWhere((row) => mustMention.some((field) => !lower(textOf(row)).includes(lower(row[field]))))),
-    ...whenAny('A6', 'A6_BANNED_PHRASE', `Copy must not say: ${bannedPhrases.join(', ')}`, keysWhere((row) => bannedPhrases.some((phrase) => lower(textOf(row)).includes(lower(phrase))))),
+    ...whenAny('A6', 'A6_BANNED_PHRASE', `Copy must not say: ${bannedPhrases.join(', ')}`, keysWhere((row) => bannedPhrases.some((phrase) => containsPhrase(textOf(row), phrase)))),
   ];
 }
 

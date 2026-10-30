@@ -40,5 +40,5 @@ export function normalizeRow(row) {
 
 export const normalizeTable = (table) => table.map(normalizeRow);
 
-// Handles both LF and CRLF line endings, so a table saved on Windows parses the same way.
-export const parseCsvTable = (text) => parse(text, {columns: true, skip_empty_lines: true});
+// Handles LF, CRLF and the byte order mark Excel adds, so a table saved on Windows parses the same way.
+export const parseCsvTable = (text) => parse(text, {columns: true, skip_empty_lines: true, bom: true});

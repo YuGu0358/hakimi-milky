@@ -235,9 +235,33 @@ test('checkProposal lets the cheap agent through when it is the one proposed', (
   assert.equal(decision.ok, true);
 });
 
+test('a retry skips only the budget checks: key, input and pay-by still apply', () => {
+  const state = ledger({locked: 300000n, hires: 3, subtasks: openSubtask, purchases: openPurchase});
+  assertDenied(guard(ctx({ledger: state, quote: quote({sellerVkey: 'ff'.repeat(28)})})), 'G1', 'G1_VKEY_MISMATCH');
+  assertDenied(guard(ctx({ledger: state, quote: quote({inputHash: 'ee'.repeat(32)})})), 'G3', 'G3_INPUT_HASH_MISMATCH');
+  assertDenied(guard(ctx({ledger: state, now: T0 + 8 * MINUTE_MS})), 'G4', 'G4_PAYBY_PASSED');
+});
+
+test('a purchase the service rejected earlier is treated as new, not as a retry', () => {
+  const state = ledger({
+    subtasks: {normalize: {status: 'failed', blockchainIdentifier: 'bid-1'}},
+    purchases: {'bid-1': {nonce, subtask: 'normalize', status: 'rejected', settled: true}},
+  });
+  assert.deepEqual(guard(ctx({ledger: state})), {ok: true, retry: false});
+});
+
+test('a purchase that already finished is denied', () => {
+  const state = ledger({
+    subtasks: {normalize: {status: 'failed', blockchainIdentifier: 'bid-1'}},
+    purchases: {'bid-1': {nonce, subtask: 'normalize', status: 'refund_withdrawn', settled: true}},
+  });
+  assertDenied(guard(ctx({ledger: state})), 'G5', 'G5_ALREADY_SETTLED');
+});
+
 test('guard does not mutate the context it receives', () => {
-  const input = ctx();
-  const before = JSON.stringify({...input, ledger: null});
-  guard(input);
-  assert.equal(JSON.stringify({...input, ledger: null}), before);
+  const input = ctx({ledger: ledger({locked: 200000n, hires: 1, subtasks: openSubtask, purchases: openPurchase})});
+  const before = structuredClone(input);
+  guard({...input, quote: quote({blockchainIdentifier: 'bid-2'})});
+  checkProposal({mandate: input.mandate, ledger: input.ledger, proposal: proposal(), listing: standard});
+  assert.deepEqual(input, before);
 });

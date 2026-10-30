@@ -159,6 +159,12 @@ test('A6 requires each mandatory attribute, ignoring case', () => {
   assert.equal(checkCopy({...goodCopy, 'HM-001': 'OAT MILK BARISTA 1L, sold by PCS.'}).ok, true);
 });
 
+test('A6 matches banned phrases as whole words, so an honest seller is not refunded over "secures"', () => {
+  assert.equal(checkCopy({...goodCopy, 'HM-001': `${goodCopy['HM-001']} Secures four cups.`}).ok, true);
+  assert.ok(codes(checkCopy({...goodCopy, 'HM-001': `${goodCopy['HM-001']} Cures colds.`})).includes('A6_BANNED_PHRASE'));
+  assert.ok(codes(checkCopy({...goodCopy, 'HM-001': `${goodCopy['HM-001']} 100% organic.`})).includes('A6_BANNED_PHRASE'));
+});
+
 test('A6 rejects a banned phrase in any case', () => {
   const copy = {...goodCopy, 'HM-001': `${goodCopy['HM-001']} GUARANTEED fresh.`};
   assert.deepEqual(failure(checkCopy(copy), 'A6_BANNED_PHRASE').skus, ['HM-001']);

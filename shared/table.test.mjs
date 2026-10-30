@@ -46,6 +46,12 @@ test('parseCsvTable gives the same rows for LF and CRLF files', () => {
   assert.equal(parseCsvTable(lf)[1].name, 'Whole Milk, UHT');
 });
 
+test('parseCsvTable ignores the byte order mark Excel on Windows writes', () => {
+  const csv = 'sku,name\nHM-001,Oat Milk\n';
+  assert.deepEqual(parseCsvTable(`﻿${csv}`), parseCsvTable(csv));
+  assert.equal(parseCsvTable(`﻿${csv}`)[0].sku, 'HM-001');
+});
+
 test('parseCsvTable throws on a row with the wrong column count', () => {
   assert.throws(() => parseCsvTable('sku,name\nHM-001\n'));
 });

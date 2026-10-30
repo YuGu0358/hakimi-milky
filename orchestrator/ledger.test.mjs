@@ -88,6 +88,30 @@ test('steps that carry no money leave the budget alone', () => {
   assert.equal(state.purchases['bid-1'].status, 'created');
 });
 
+test('a purchase never moves backwards when a retry logs an earlier step again', () => {
+  const state = stateAfter(reserved(), onBid('purchase.funds_locked'), onBid('purchase.created'));
+  assert.equal(state.purchases['bid-1'].status, 'funds_locked');
+});
+
+test('a late rejection line cannot undo work that already passed', () => {
+  const state = stateAfter(reserved(), onBid('purchase.created'), onBid('acceptance.passed'), onBid('purchase.rejected'));
+  assert.equal(state.subtasks.normalize.status, 'accepted');
+  assert.equal(state.units[USDM_UNIT].locked, 300000n);
+  assert.equal(state.hires, 1);
+});
+
+test('the refund of an old hire does not reopen a subtask a newer hire now owns', () => {
+  const state = stateAfter(reserved('bid-old'), onBid('acceptance.failed', 'bid-old'), reserved('bid-new'), onBid('refund.withdrawn', 'bid-old'));
+  assert.equal(state.subtasks.normalize.status, 'open');
+  assert.equal(state.subtasks.normalize.blockchainIdentifier, 'bid-new');
+  assert.equal(state.units[USDM_UNIT].locked, 300000n);
+});
+
+test('money the chain says went to a seller counts as spent even on a purchase marked rejected', () => {
+  const state = stateAfter(reserved(), onBid('purchase.rejected'), onBid('seller.withdrawn'));
+  assert.deepEqual(state.units[USDM_UNIT], {spent: 300000n, locked: 0n});
+});
+
 test('unfinished lists open purchases with the nearest unlock first and skips finished ones', () => {
   const state = stateAfter(
     reserved('bid-late', 3_000_000_000_000),

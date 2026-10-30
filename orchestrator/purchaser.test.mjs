@@ -86,7 +86,8 @@ test('a denied quote never reaches the Payment Service', async () => {
 });
 
 test('two parallel purchases cannot both take the last of the budget', async () => {
-  const {ledger, payments, purchaser, calls} = setup();
+  const accepted = async (quote) => ({id: 'x', blockchainIdentifier: quote.blockchainIdentifier, existed: false});
+  const {ledger, payments, purchaser, calls} = setup({overrides: {purchase: accepted}});
   const first = await buyContext(payments, cheap, 1, 'copy-a');
   await purchaser.buy(first);
   assert.equal(locked(ledger), 200000n);
@@ -151,6 +152,169 @@ test('retrying after a crash reuses the reservation and places no second order',
   assert.equal(again.created.existed, true);
   assert.equal(locked(ledger), 300000n);
   assert.equal(ledger.state().hires, 1);
+});
+
+test('the lock holds until the order has been answered, so a second buy cannot start', async () => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const slow = async (quote) => {
+    await gate;
+    return {id: 'x', blockchainIdentifier: quote.blockchainIdentifier, existed: false};
+  };
+  const {ledger, payments, purchaser, calls} = setup({overrides: {purchase: slow}});
+  const a = purchaser.buy(await buyContext(payments, standard, 1, 'normalize'));
+  const b = purchaser.buy(await buyContext(payments, cheap, 2, 'copy'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.purchase, 1);
+  assert.equal(steps(ledger).filter((step) => step === 'purchase.reserved').length, 1);
+  release();
+  const results = await Promise.all([a, b]);
+  assert.ok(results.every((result) => result.ok));
+  assert.equal(calls.purchase, 2);
+});
+
+test('a 409 means the order exists and never gives the money or the hire back', async () => {
+  const conflict = () => {
+    throw new PaymentsError('Purchase exists', {status: 409});
+  };
+  const {ledger, payments, purchaser} = setup({overrides: {purchase: conflict}});
+  const result = await purchaser.buy(await buyContext(payments, standard, 1));
+  assert.equal(result.ok, true);
+  assert.equal(result.created.existed, true);
+  assert.equal(locked(ledger), 300000n);
+  assert.equal(ledger.state().hires, 1);
+  assert.ok(!steps(ledger).includes('purchase.rejected'));
+});
+
+test('after a real restart a retry looks the order up first and sends nothing', async () => {
+  const {payments, purchaser, path} = setup();
+  const context = await buyContext(payments, standard, 1);
+  await purchaser.buy(context);
+  const reopened = createLedger({path, taskId: 'task-1', clock});
+  let sent = 0;
+  const restarted = createPurchaser({
+    mandate,
+    ledger: reopened,
+    purchase: (...args) => {
+      sent += 1;
+      return payments.purchase(...args);
+    },
+    getPurchase: payments.getPurchase,
+    clock,
+  });
+  const again = await restarted.buy(context);
+  assert.equal(again.ok, true);
+  assert.equal(sent, 0);
+  assert.equal(steps(reopened).filter((step) => step === 'purchase.reserved').length, 1);
+  assert.equal(reopened.state().hires, 1);
+  assert.equal(locked(reopened), 300000n);
+});
+
+test('an order rejected earlier can only return through the full checks and a new reservation', async () => {
+  let attempts = 0;
+  const {ledger, payments, purchaser} = setup({
+    overrides: {
+      purchase: (quote, metadata, amounts) => {
+        attempts += 1;
+        if (attempts === 1) throw new PaymentsError('Insufficient funds', {status: 400});
+        return payments.purchase(quote, metadata, amounts);
+      },
+    },
+  });
+  const context = await buyContext(payments, standard, 1);
+  await purchaser.buy(context);
+  assert.equal(locked(ledger), 0n);
+  const second = await purchaser.buy(context);
+  assert.equal(second.ok, true);
+  assert.equal(steps(ledger).filter((step) => step === 'purchase.reserved').length, 2);
+  assert.equal(locked(ledger), 300000n);
+  assert.equal(ledger.state().hires, 1);
+  const refs = {blockchainIdentifier: context.quote.blockchainIdentifier};
+  ledger.append({step: 'seller.withdrawn', refs});
+  assert.deepEqual(ledger.state().units[USDM_UNIT], {spent: 300000n, locked: 0n});
+});
+
+test('a purchase that already finished cannot be replayed', async () => {
+  const {ledger, payments, purchaser, calls} = setup();
+  const context = await buyContext(payments, standard, 1);
+  await purchaser.buy(context);
+  ledger.append({step: 'seller.withdrawn', refs: {blockchainIdentifier: context.quote.blockchainIdentifier}});
+  const replay = await purchaser.buy(context);
+  assert.equal(replay.ok, false);
+  assert.equal(replay.code, 'G5_ALREADY_SETTLED');
+  assert.equal(calls.purchase, 1);
+  assert.equal(ledger.state().hires, 1);
+});
+
+test('an empty lookup is not proof the order exists, so it is sent again', async () => {
+  let sent = 0;
+  const {payments, purchaser} = setup({
+    overrides: {
+      purchase: (quote, metadata, amounts) => {
+        sent += 1;
+        if (sent === 1) throw new PaymentsError('Request timed out');
+        return payments.purchase(quote, metadata, amounts);
+      },
+      getPurchase: async () => undefined,
+    },
+  });
+  const result = await purchaser.buy(await buyContext(payments, standard, 1));
+  assert.equal(result.ok, true);
+  assert.equal(sent, 2);
+});
+
+test('a resend uses exactly the same order as the first attempt', async () => {
+  const sentArgs = [];
+  const {payments, purchaser} = setup({
+    overrides: {
+      purchase: (...args) => {
+        sentArgs.push(structuredClone(args));
+        if (sentArgs.length === 1) throw new PaymentsError('Request timed out');
+        return {id: 'x', blockchainIdentifier: args[0].blockchainIdentifier, existed: false};
+      },
+      getPurchase: () => {
+        throw new PaymentsError('Purchase not found', {status: 404});
+      },
+    },
+  });
+  await purchaser.buy(await buyContext(payments, standard, 1));
+  assert.equal(sentArgs.length, 2);
+  assert.deepEqual(sentArgs[1], sentArgs[0]);
+});
+
+test('when the lookup itself is uncertain it stops without resending', async () => {
+  const uncertain = () => {
+    throw new PaymentsError('timeout');
+  };
+  const {payments, purchaser, calls} = setup({overrides: {purchase: uncertain, getPurchase: uncertain}});
+  const result = await purchaser.buy(await buyContext(payments, standard, 1));
+  assert.equal(result.stop, true);
+  assert.equal(calls.purchase, 1);
+});
+
+test('the order carries the amount the guard checked, so the service can refuse any other', async () => {
+  const sentAmounts = [];
+  const {payments, purchaser} = setup({
+    overrides: {
+      purchase: (quote, metadata, amounts) => {
+        sentAmounts.push(amounts);
+        return {id: 'x', blockchainIdentifier: quote.blockchainIdentifier, existed: false};
+      },
+    },
+  });
+  await purchaser.buy(await buyContext(payments, standard, 1));
+  assert.deepEqual(sentAmounts, [[{unit: USDM_UNIT, amount: '300000'}]]);
+});
+
+test('a listing that understates the on-chain price is refused and releases the money', async () => {
+  const {ledger, payments, purchaser} = setup();
+  const context = await buyContext(payments, standard, 1);
+  const result = await purchaser.buy({...context, price: {unit: USDM_UNIT, amount: '100000'}});
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'PURCHASE_REJECTED');
+  assert.equal(locked(ledger), 0n);
 });
 
 test('replaying the same quote ten times yields one reservation', async () => {

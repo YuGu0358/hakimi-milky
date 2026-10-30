@@ -89,6 +89,9 @@ function checkNotDuplicate({ledger, quote, nonce, subtask}) {
   if (existing && existing.nonce !== nonce) {
     return deny('G5', 'G5_NONCE_CHANGED', 'A retry must reuse the nonce of the original order');
   }
+  if (existing?.settled && existing.status !== 'rejected') {
+    return deny('G5', 'G5_ALREADY_SETTLED', `This purchase already finished as ${existing.status}`);
+  }
   return checkSubtaskFree({ledger, subtask});
 }
 
@@ -98,10 +101,14 @@ function checkHires({mandate, ledger}) {
     : deny('G6', 'G6_MAX_HIRES', `Already hired ${ledger.hires} times, the mandate allows ${mandate.maxHires}`);
 }
 
-const isRetry = ({ledger, quote, nonce}) => ledger.purchases[quote.blockchainIdentifier]?.nonce === nonce;
+const isRetry = ({ledger, quote, nonce}) => {
+  const existing = ledger.purchases[quote.blockchainIdentifier];
+  return existing?.nonce === nonce && !existing.settled;
+};
 
-// Runs before paying. A retry of an order we already reserved skips the budget and hire
-// checks because it adds nothing new; it still has to match the mandate and the input.
+// Runs before paying. A retry of an order whose money is still reserved skips the budget and
+// hire checks because it adds nothing new; it still has to match the mandate and the input.
+// An order the service rejected holds no money any more, so trying it again counts as new.
 export function guard(ctx) {
   const retry = isRetry(ctx);
   const checks = [

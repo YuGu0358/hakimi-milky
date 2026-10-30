@@ -132,12 +132,16 @@ export function createMockPayments({faults = {}, clock = Date.now} = {}) {
       });
     },
 
-    async purchase(quote, metadata = {}) {
+    async purchase(quote, metadata = {}, amounts = null) {
       if (faults.rejectPurchase) throw new PaymentsError(faults.rejectPurchase, {status: 400});
       if (useOneShot('dropNextPurchase')) throw new PaymentsError('Request timed out');
       const existing = purchases.get(quote.blockchainIdentifier);
       if (existing) return {id: existing.id, blockchainIdentifier: quote.blockchainIdentifier, nextAction: 'FundsLockingRequested', existed: true};
       const fixture = agents.find((item) => item.agentIdentifier === quote.agentIdentifier);
+      const [amount] = amounts ?? [fixture.price];
+      if (amounts && (amounts.length !== 1 || amount.unit !== fixture.price.unit || amount.amount !== fixture.price.amount)) {
+        throw new PaymentsError('Provided Amounts do not match the fixed pricing of the agent', {status: 400});
+      }
       const record = {
         id: `mock-purchase-${nextId()}`,
         blockchainIdentifier: quote.blockchainIdentifier,
