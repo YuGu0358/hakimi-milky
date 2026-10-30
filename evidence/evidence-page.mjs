@@ -11,6 +11,7 @@ import {formatPrice} from '../shared/money.mjs';
 
 const HERE = fileURLToPath(new URL('./', import.meta.url));
 const LOCAL = fileURLToPath(new URL('../.local/', import.meta.url));
+const FRONT_DESK_LOCAL = fileURLToPath(new URL('../frontdesk/.local/', import.meta.url));
 const RUNS_DIR = join(HERE, 'runs');
 const TX_URL = 'https://preprod.cardanoscan.io/transaction/';
 const IS_TX_HASH = /^[0-9a-f]{64}$/;
@@ -18,7 +19,7 @@ const CHAIN_STATE = /^[A-Z][a-z]+(?:[A-Z][a-z]+)+$/; // FundsLocked, ResultSubmi
 
 const JOB_LABELS = Object.freeze({normalize: 'Table', copy: 'Product texts'});
 const STEP_LABELS = Object.freeze({
-  'mandate.confirmed': "Owner's mandate fixed",
+  'mandate.confirmed': 'Mandate fixed',
   'plan.proposed': 'Planner proposes a hire',
   'plan.rejected': 'Planner reply refused by the schema',
   'proposal.checked': 'Guard checks the proposal',
@@ -54,8 +55,9 @@ h1 { font-size: 28px; margin: 0 0 8px; } h2 { font-size: 20px; margin: 40px 0 8p
 a { color: var(--accent); } .muted { color: var(--muted); } .deny { color: var(--deny); font-weight: 600; } .allow { color: var(--allow); font-weight: 600; }
 .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 12px 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+pre { overflow-x: auto; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; } th, td { padding: 8px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
-tr:last-child td { border-bottom: 0; } th { color: var(--muted); font-weight: 500; white-space: nowrap; } td.when, td.tx { white-space: nowrap; font-variant-numeric: tabular-nums; }
+td { overflow-wrap: anywhere; } tr:last-child td { border-bottom: 0; } th { color: var(--muted); font-weight: 500; white-space: nowrap; } td.when, td.tx { white-space: nowrap; font-variant-numeric: tabular-nums; }
 `;
 
 export const escapeHtml = (value) =>
@@ -87,7 +89,8 @@ function stepRow(line, startedAt, names) {
   const what = STEP_LABELS[line.step] ?? line.step;
   const amount = line.amount ? money(line.amount.value) : '';
   const reason = CHAIN_STATE.test(line.reason ?? '') ? '' : line.reason; // the step already says it
-  const details = [agentOf(line, names), reason, amount].filter(Boolean).map(escapeHtml).join(' · ');
+  const later = line.detail?.reconciled ? 'recorded later, when this run was caught up with the chain. The time on the left is when we wrote it down; the transaction shows when the money moved' : '';
+  const details = [agentOf(line, names), reason, amount, later].filter(Boolean).map(escapeHtml).join(' · ');
   return `<tr><td class="when">+${minutes} min</td><td>${escapeHtml(job)}</td><td>${escapeHtml(what)}</td><td>${verdictOf(line)}</td><td>${details}</td><td class="tx">${txLink(line.refs?.txHash)}</td></tr>`;
 }
 
@@ -120,7 +123,14 @@ function factsHtml(lines, mandate) {
   return `<div class="facts">${facts.map((fact) => `<span>${escapeHtml(fact)}</span>`).join('')}</div>`;
 }
 
-export function renderRun({run, lines, mandate}) {
+function settlementHtml(settlement) {
+  if (!settlement) return '';
+  const outcome = settlement.verified ? 'verified' : 'not verified yet';
+  const net = settlement.netAtomicUnits ? ` The seller's wallet nets ${money(settlement.netAtomicUnits)} in this transaction, which also collected other payments.` : '';
+  return `<p>Seller's receipt: <span class="${settlement.verified ? 'allow' : 'deny'}">${outcome}</span>. ${txLink(settlement.txHash)}${escapeHtml(net)} ${escapeHtml(settlement.method)}.</p>`;
+}
+
+export function renderRun({run, lines, mandate, settlement, crashLog}) {
   const shown = lines.filter(({step}) => !ROUTINE_STEPS.has(step));
   const left = lines.length - shown.length;
   const startedAt = lines[0]?.ts ?? 0;
@@ -132,10 +142,25 @@ export function renderRun({run, lines, mandate}) {
 ${run.sokosumiTask ? `<p class="muted">Sokosumi task ${escapeHtml(run.sokosumiTask)}</p>` : ''}
 ${transactions.length > 0 ? `<p>${transactions.join(' · ')}</p>` : ''}
 ${factsHtml(lines, mandate)}
+${settlementHtml(settlement)}
+${crashLog ? `<p>The test's own log:</p><pre>${escapeHtml(crashLog)}</pre>` : ''}
 <div class="scroll"><table><thead><tr><th>When</th><th>Job</th><th>Step</th><th>Verdict</th><th>Details</th><th>Transaction</th></tr></thead>
 <tbody>${shown.map((line) => stepRow(line, startedAt, names)).join('\n')}</tbody></table></div>
-${left > 0 ? `<p class="muted">${left} routine steps are left out here. The raw record keeps them.</p>` : ''}
+${left > 0 ? `<p class="muted">${left} routine steps are left out here. <a href="runs/${escapeHtml(run.taskId)}-evidence.jsonl">The raw record</a> keeps them.</p>` : ''}
 </section>`;
+}
+
+function trackRecordHtml(trackRecords, names) {
+  if (!trackRecords) return '';
+  const known = Object.entries(names).filter(([id]) => trackRecords[id]);
+  if (known.length === 0) return '';
+  const rows = known.map(([id, name]) => {
+    const {completed, refunded, disputed} = trackRecords[id];
+    return `<tr><td>${escapeHtml(name)}</td><td>${completed}</td><td>${refunded}</td><td>${disputed}</td></tr>`;
+  });
+  return `<section><h2>Track record, read from the escrow contract</h2>
+<p>Each job's final step on chain, counted per agent. The planner reads these numbers. Only the chain writes them, but an agent could pad its own by buying from itself, and nothing here checks for that.</p>
+<div class="scroll"><table><thead><tr><th>Agent</th><th>Paid</th><th>Refunded</th><th>Disputed</th></tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
 }
 
 function rejectionsHtml(rejections) {
@@ -143,15 +168,15 @@ function rejectionsHtml(rejections) {
   const rows = rejections.attempts.map(
     ({name, ok, actual}) => `<tr><td>${escapeHtml(name)}</td><td class="${ok ? 'allow' : 'deny'}">${ok ? 'refused' : 'not as expected'}</td><td>${escapeHtml(actual.message)}</td></tr>`,
   );
-  return `<section><h2>The limit underneath the guard</h2>
-<p>The orchestrator's key can only spend one run's budget, on Preprod, from the purchasing wallet. These calls went to the real Payment Service with that key.</p>
+  return `<section><h2>C5: the limit underneath the guard</h2>
+<p>The orchestrator's key can spend one run's budget, on Preprod, from the purchasing wallet. That holds against a bug in the guard or a hijacked model, not against someone who controls the worker, which can refill it. These calls went to the real Payment Service with that key.</p>
 <div class="scroll"><table><thead><tr><th>Call</th><th>Result</th><th>What the service said</th></tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
 }
 
 function batchHtml(batch) {
   if (!batch) return '';
   const byRule = Object.entries(batch.violations.byRule).map(([rule, count]) => `${escapeHtml(rule)}: ${count}`).join(', ');
-  return `<section><h2>The guard, on generated cases</h2><ul>
+  return `<section><h2>C7: the guard, on generated cases</h2><ul>
 <li>${batch.violations.blocked} of ${batch.violations.total} out-of-mandate cases blocked (${byRule}).</li>
 <li>${batch.legal.allowed} of ${batch.legal.total} legal cases allowed.</li>
 <li>A replay of ${batch.replay.attempts} attempts made ${batch.replay.orders} order.</li>
@@ -163,21 +188,23 @@ function redteamHtml(redteam) {
   if (!redteam) return '';
   const {proposals, injections} = redteam;
   const guardBlocked = Object.values(proposals.guardBlocked).reduce((sum, count) => sum + count, 0);
-  return `<section><h2>Attacks written by a model</h2><ul>
+  return `<section><h2>C7: attacks written by a model</h2><ul>
 <li>${proposals.generated} model-written attacks: ${proposals.schemaRejected} stopped by the schema, ${guardBlocked} by the guard, ${proposals.reviewer.veto + proposals.reviewer.escalate} by the reviewer, ${proposals.outsideMandate.length} outside the mandate.</li>
 <li>The other ${proposals.reviewer.allow} stayed inside the mandate. They only inflate a maximum price, and the listed price is what gets paid, or ask for a second hire, which the guard stops in a live run.</li>
 <li>The real planner fell for ${injections.hooked} of ${injections.texts} hand-written notes hidden in a supplier table.</li>
 </ul></section>`;
 }
 
-export function renderPage({runs, rejections, batch, redteam}) {
+export function renderPage({runs, rejections, batch, redteam, trackRecords}) {
+  const names = Object.assign({}, ...runs.map(({mandate}) => namesFrom(mandate)));
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hakimi Milky evidence</title><style>${STYLE}</style></head>
 <body>
 <h1>Hakimi Milky evidence</h1>
-<p>An agent hires other agents through Masumi escrow on Cardano Preprod, under a mandate its owner set. Everything here is test money, and each transaction links to the chain. Every agent hired is our own.</p>
+<p>An agent hires other agents through Masumi escrow on Cardano Preprod, under a mandate with fixed limits. Everything here is test money, and each transaction links to the chain. Every agent hired is our own.</p>
 ${runs.map(renderRun).join('\n')}
+${trackRecordHtml(trackRecords, names)}
 ${rejectionsHtml(rejections)}
 ${batchHtml(batch)}
 ${redteamHtml(redteam)}
@@ -188,12 +215,26 @@ ${redteamHtml(redteam)}
 const readJsonIfThere = (path) => (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null);
 const readLines = (path) => readFileSync(path, 'utf8').split('\n').filter(Boolean).map((text) => JSON.parse(text));
 
+// The seller's receipt is in the front desk's own task record. Only that part is published.
+function publishSettlement(taskId) {
+  const journal = readJsonIfThere(join(FRONT_DESK_LOCAL, `${taskId}.json`));
+  if (journal?.paid?.settlement) writeFileSync(join(RUNS_DIR, `${taskId}-settlement.json`), JSON.stringify(journal.paid.settlement, null, 2));
+  return readJsonIfThere(join(RUNS_DIR, `${taskId}-settlement.json`));
+}
+
 function publishRun(run) {
-  const names = {evidence: `${run.taskId}-evidence.jsonl`, mandate: `${run.taskId}-mandate.json`};
+  const names = {evidence: `${run.taskId}-evidence.jsonl`, mandate: `${run.taskId}-mandate.json`, crashLog: `${run.taskId}-crash-test.log`};
   for (const name of Object.values(names)) {
     if (existsSync(join(LOCAL, name))) copyFileSync(join(LOCAL, name), join(RUNS_DIR, name));
   }
-  return {run, lines: readLines(join(RUNS_DIR, names.evidence)), mandate: readJsonIfThere(join(RUNS_DIR, names.mandate))};
+  const crashPath = join(RUNS_DIR, names.crashLog);
+  return {
+    run,
+    lines: readLines(join(RUNS_DIR, names.evidence)),
+    mandate: readJsonIfThere(join(RUNS_DIR, names.mandate)),
+    settlement: publishSettlement(run.taskId),
+    crashLog: existsSync(crashPath) ? readFileSync(crashPath, 'utf8').trim() : null,
+  };
 }
 
 function publishReport(name) {
@@ -208,6 +249,7 @@ function main() {
     rejections: publishReport('rejections.json'),
     batch: publishReport('c7-report.json'),
     redteam: publishReport('redteam-report.json'),
+    trackRecords: publishReport('track-records.json'),
   });
   writeFileSync(join(HERE, 'index.html'), page);
   console.log(`Wrote ${join(HERE, 'index.html')}`);

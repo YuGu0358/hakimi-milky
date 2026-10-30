@@ -2,6 +2,7 @@ import {randomBytes} from 'node:crypto';
 import {MINUTE_MS} from '../shared/constants.mjs';
 import {isConfirmed, jobPrompt} from '../shared/schemas.mjs';
 import {accept} from './acceptance.mjs';
+import {chainProgress} from './chain-progress.mjs';
 import {checkProposal} from './guard.mjs';
 
 const REFUND_MARGIN_MS = 5 * MINUTE_MS; // a refund request needs time to reach the chain before unlock
@@ -11,20 +12,7 @@ const COLLECT_WAIT_MS = 30 * MINUTE_MS; // the node collects for the seller 10 m
 const RESULT_FETCH_ATTEMPTS = 3;
 const DEFAULT_POLL_MS = 10_000;
 
-const CHAIN_STEPS = Object.freeze([
-  ['FundsLocked', 'purchase.funds_locked'],
-  ['ResultSubmitted', 'result.submitted'],
-  ['RefundRequested', 'refund.requested'],
-  ['Disputed', 'refund.requested'],
-  ['RefundAuthorized', 'refund.authorized'],
-  ['RefundWithdrawn', 'refund.withdrawn'],
-  ['Withdrawn', 'seller.withdrawn'],
-  ['DisputedWithdrawn', 'seller.withdrawn'],
-]);
 const REFUND_UNDERWAY = new Set(['RefundRequested', 'Disputed', 'RefundAuthorized', 'RefundWithdrawn']);
-
-const confirmedTx = (view, state) =>
-  [view.current, ...view.history].find((tx) => tx?.status === 'Confirmed' && tx?.newOnChainState === state)?.txHash ?? undefined;
 
 const refsOf = ({quote, nonce}) => ({
   ...(nonce ? {nonce} : {}),
@@ -56,10 +44,8 @@ export function createHirer({
   const recordOnce = (ctx, step, extra) => (hasLogged(ctx, step) ? undefined : record(ctx, step, extra));
 
   function logChainProgress(ctx, view) {
-    for (const [state, step] of CHAIN_STEPS) {
-      if (isConfirmed(view, state)) {
-        recordOnce(ctx, step, {refs: {...refsOf(ctx), txHash: confirmedTx(view, state)}, reason: state});
-      }
+    for (const {step, reason, txHash} of chainProgress(view)) {
+      recordOnce(ctx, step, {refs: {...refsOf(ctx), txHash}, reason});
     }
   }
 

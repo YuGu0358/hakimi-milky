@@ -16,7 +16,7 @@ const CACHE_PATH = fileURLToPath(new URL('../.local/track-record-cache.json', im
 const BLOCKFROST_URL = 'https://cardano-preprod.blockfrost.io/api/v0';
 const REQUEST_TIMEOUT_MS = 30_000;
 const PAGE_SIZE = 100;
-const MAX_TRANSACTIONS = 300;
+const FIRST_READ_LIMIT = 300;
 const PAUSE_BETWEEN_READS_MS = 300;
 const RATE_LIMITED = 429;
 const RATE_LIMIT_WAIT_MS = 3_000;
@@ -43,14 +43,19 @@ const createGet =
     }
   };
 
-export async function recentTransactions({get, address = ESCROW_CONTRACT, limit = MAX_TRANSACTIONS}) {
-  const hashes = [];
-  for (let page = 1; hashes.length < limit; page += 1) {
+// Newest first, back to the first transaction already known, because everything older was read before.
+// Only the very first read has a limit: a limit later on would leave a gap that is never read.
+export async function unreadTransactions({get, cache = {}, address = ESCROW_CONTRACT, limit = FIRST_READ_LIMIT}) {
+  const isFirstRead = Object.keys(cache).length === 0;
+  const unread = [];
+  for (let page = 1; ; page += 1) {
     const rows = await get(`/addresses/${address}/transactions?order=desc&count=${PAGE_SIZE}&page=${page}`);
-    hashes.push(...rows.map(({tx_hash: hash}) => hash));
-    if (rows.length < PAGE_SIZE) break;
+    const hashes = rows.map(({tx_hash: hash}) => hash);
+    const firstKnown = hashes.findIndex((hash) => Object.hasOwn(cache, hash));
+    unread.push(...(firstKnown < 0 ? hashes : hashes.slice(0, firstKnown)));
+    if (isFirstRead && unread.length >= limit) return {hashes: unread.slice(0, limit), truncated: rows.length === PAGE_SIZE || unread.length > limit};
+    if (firstKnown >= 0 || rows.length < PAGE_SIZE) return {hashes: unread, truncated: false};
   }
-  return hashes.slice(0, limit);
 }
 
 const byOutputReference = (a, b) => {
@@ -72,7 +77,7 @@ export async function spendsOf({get, txHash, address = ESCROW_CONTRACT}) {
       const agentIdentifier = datum.json_value?.fields?.[AGENT_FIELD]?.bytes;
       const action = redeemer.json_value?.constructor;
       // Anyone can write to the contract, so a value of the wrong shape is skipped, not trusted.
-      return typeof agentIdentifier === 'string' && Number.isInteger(action) ? {agentIdentifier, action} : null;
+      return typeof agentIdentifier === 'string' && agentIdentifier !== '' && Number.isInteger(action) ? {agentIdentifier, action} : null;
     }),
   );
   return spends.filter(Boolean);
@@ -81,23 +86,23 @@ export async function spendsOf({get, txHash, address = ESCROW_CONTRACT}) {
 export function tally(spends) {
   return spends.reduce((records, {agentIdentifier, action}) => {
     const outcome = OUTCOME_OF_ACTION[action];
-    if (!outcome) return records;
+    if (!outcome || !agentIdentifier) return records;
     const record = records[agentIdentifier] ?? {completed: 0, refunded: 0, disputed: 0};
     return {...records, [agentIdentifier]: {...record, [outcome]: record[outcome] + 1}};
   }, {});
 }
 
-// A transaction on chain does not change, so each one is read once.
-export async function buildTrackRecords({get, cache = {}, limit = MAX_TRANSACTIONS, pause = async () => {}}) {
-  const hashes = await recentTransactions({get, limit});
-  const unread = hashes.filter((hash) => !Object.hasOwn(cache, hash));
+// A transaction on chain does not change, so each one is read once and counts for good. Counting only the
+// newest ones would wash an agent's refunds off its record as other people's traffic pushes them out.
+export async function buildTrackRecords({get, cache = {}, limit = FIRST_READ_LIMIT, pause = async () => {}}) {
+  const {hashes, truncated} = await unreadTransactions({get, cache, limit});
   const read = [];
-  for (const hash of unread) {
+  for (const hash of hashes) {
     read.push([hash, await spendsOf({get, txHash: hash})]);
     await pause();
   }
   const nextCache = {...cache, ...Object.fromEntries(read)};
-  return {records: tally(hashes.flatMap((hash) => nextCache[hash])), cache: nextCache, transactions: hashes.length, newlyRead: unread.length};
+  return {records: tally(Object.values(nextCache).flat()), cache: nextCache, transactions: Object.keys(nextCache).length, newlyRead: hashes.length, truncated};
 }
 
 const readJsonIfThere = (path, fallback) => (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : fallback);
@@ -109,14 +114,16 @@ function writePrivateJson(path, value) {
 
 async function main() {
   if (!process.env.BLOCKFROST_API_KEY_PREPROD) throw new Error('Set BLOCKFROST_API_KEY_PREPROD');
-  const {records, cache, transactions, newlyRead} = await buildTrackRecords({
+  const {records, cache, transactions, newlyRead, truncated} = await buildTrackRecords({
     get: createGet({key: process.env.BLOCKFROST_API_KEY_PREPROD}),
     cache: readJsonIfThere(CACHE_PATH, {}),
     pause: () => sleep(PAUSE_BETWEEN_READS_MS),
+    limit: Number(process.argv[2]) || FIRST_READ_LIMIT,
   });
   writePrivateJson(CACHE_PATH, cache);
   writePrivateJson(TRACK_RECORDS_PATH, records);
-  console.log(`Read ${transactions} escrow transactions, ${newlyRead} of them new. ${Object.keys(records).length} agents have a record.`);
+  console.log(`${transactions} escrow transactions known, ${newlyRead} of them new. ${Object.keys(records).length} agents have a record.`);
+  if (truncated) console.log(`This first read stopped at the newest ${newlyRead}. For more, delete ${CACHE_PATH} and pass a higher limit.`);
   for (const {name, agentIdentifier} of readJsonIfThere(ALLOWLIST_PATH, [])) {
     const {completed = 0, refunded = 0, disputed = 0} = records[agentIdentifier] ?? {};
     console.log(`${name.padEnd(28)} completed ${completed}, refunded ${refunded}, disputed ${disputed}`);

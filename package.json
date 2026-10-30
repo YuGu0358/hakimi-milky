@@ -15,6 +15,8 @@
     "payments:key": "node --env-file-if-exists=.env payments/buyer-key.mjs",
     "track-record": "node --env-file-if-exists=.env track-record/track-record.mjs",
     "rejections": "node --env-file-if-exists=.env payments/rejections.mjs",
+    "reconcile": "node --env-file-if-exists=.env orchestrator/run-reconcile.mjs",
+    "crash-test": "node --env-file-if-exists=.env orchestrator/crash-test.mjs",
     "evidence": "node evidence/evidence-page.mjs",
     "specialists": "node --env-file-if-exists=.env specialists/start.mjs",
     "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs",

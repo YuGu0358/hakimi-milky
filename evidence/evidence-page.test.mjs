@@ -103,6 +103,40 @@ test('a reason that only repeats the chain state is left out, and a real one sta
   assert.match(html, /A3_MISSING/);
 });
 
+test('a step recorded later says so', () => {
+  const html = renderRun({run: RUN, mandate: null, lines: [line(0, 'seller.withdrawn', {refs: {txHash: TX}, reason: 'Withdrawn', detail: {reconciled: true}})]});
+
+  assert.match(html, /recorded later/);
+});
+
+test('the seller\'s receipt shows whether it was verified, and what the wallet netted', () => {
+  const settlement = {verified: true, txHash: TX, netAtomicUnits: '2200000', method: 'Matched <three> sources'};
+
+  const html = renderRun({run: RUN, mandate: null, lines: [line(0, 'mandate.confirmed')], settlement});
+
+  assert.match(html, /class="allow">verified/);
+  assert.match(html, /2\.2 tUSDM/);
+  assert.ok(html.includes(`transaction/${TX}`));
+  assert.ok(html.includes('&lt;three&gt;'));
+});
+
+test('a crash test shows its own log, as text', () => {
+  const html = renderRun({run: RUN, mandate: null, lines: [line(0, 'mandate.confirmed')], crashLog: '21:45:22 Killing <pid>'});
+
+  assert.match(html, /<pre>21:45:22 Killing &lt;pid&gt;<\/pre>/);
+});
+
+test('the track record names only agents the page knows, and says what it cannot prove', () => {
+  const html = renderPage({
+    runs: [{run: RUN, mandate: MANDATE, lines: [line(0, 'mandate.confirmed')]}],
+    trackRecords: {'agent-1': {completed: 7, refunded: 3, disputed: 0}, stranger: {completed: 1, refunded: 0, disputed: 0}},
+  });
+
+  assert.match(html, /Hakimi Copywriter<\/td><td>7<\/td><td>3<\/td>/);
+  assert.ok(!html.includes('stranger'));
+  assert.match(html, /padding|pad its own/);
+});
+
 test('the mandate shows its limits in plain amounts and the agents by name', () => {
   const html = renderRun({run: RUN, mandate: MANDATE, lines: [line(0, 'mandate.confirmed')]});
 

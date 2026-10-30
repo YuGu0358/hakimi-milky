@@ -1,0 +1,10 @@
+21:45:13 Task live-c6-1793393113931. Starting the run.
+21:45:14   Task live-c6-1793393113931. To resume after a crash: npm run live -- c1 live-c6-1793393113931
+21:45:22 Both orders have gone out. Killing the process 16436 with no warning.
+21:45:22 Killed. The evidence holds 19 lines. {"reservations":2,"distinctOrders":2,"locks":0,"doubleLocks":0}
+21:45:25 Starting again with the same task.
+21:45:25   Task live-c6-1793393113931. To resume after a crash: npm run live -- c1 live-c6-1793393113931
+21:47:00   Delivered. Waiting for the money to settle.
+21:47:01 {"reservations":2,"distinctOrders":2,"locks":2,"doubleLocks":0}
+21:47:01 PASSED: 2 orders for 2 jobs, 2 locks, delivered, nothing bought twice
+21:47:01 Stopped watching. The sellers collect after the escrow unlocks: npm run reconcile records it.

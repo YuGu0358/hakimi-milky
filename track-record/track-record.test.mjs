@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildTrackRecords, recentTransactions, spendsOf, tally} from './track-record.mjs';
+import {buildTrackRecords, spendsOf, tally, unreadTransactions} from './track-record.mjs';
 import {ESCROW_CONTRACT} from '../shared/constants.mjs';
 
 const OTHER_ADDRESS = 'addr_test1other';
@@ -106,22 +106,62 @@ test('only a final step counts toward a record', () => {
   });
 });
 
-test('pages are read until the limit, or until one comes back short', async () => {
-  const page = (start, count) => Array.from({length: count}, (_, index) => ({tx_hash: `t${start + index}`}));
-  const path = (number) => `/addresses/${ESCROW_CONTRACT}/transactions?order=desc&count=100&page=${number}`;
-  const {get, calls} = getFrom({[path(1)]: page(0, 100), [path(2)]: page(100, 40)});
+const page = (start, count) => Array.from({length: count}, (_, index) => ({tx_hash: `t${start + index}`}));
+const pagePath = (number) => `/addresses/${ESCROW_CONTRACT}/transactions?order=desc&count=100&page=${number}`;
 
-  const hashes = await recentTransactions({get});
+test('pages are read until one comes back short', async () => {
+  const {get, calls} = getFrom({[pagePath(1)]: page(0, 100), [pagePath(2)]: page(100, 40)});
+
+  const {hashes, truncated} = await unreadTransactions({get});
 
   assert.equal(hashes.length, 140);
+  assert.equal(truncated, false);
   assert.equal(calls.length, 2);
-  assert.equal((await recentTransactions({get, limit: 5})).length, 5);
+});
+
+test('reading stops at the first transaction already known, because everything older was read before', async () => {
+  const {get, calls} = getFrom({[pagePath(1)]: page(0, 100), [pagePath(2)]: page(100, 100)});
+
+  const {hashes} = await unreadTransactions({get, cache: {t130: []}});
+
+  assert.equal(hashes.length, 130);
+  assert.equal(calls.length, 2);
+});
+
+test('the first read has a limit, and says when it cut something off', async () => {
+  const {get} = getFrom({[pagePath(1)]: page(0, 100), [pagePath(2)]: page(100, 100)});
+
+  const {hashes, truncated} = await unreadTransactions({get, limit: 150});
+
+  assert.equal(hashes.length, 150);
+  assert.equal(truncated, true);
+});
+
+test('later reads have no limit, or they would leave a gap that is never read', async () => {
+  const {get} = getFrom({[pagePath(1)]: page(0, 100), [pagePath(2)]: page(100, 100), [pagePath(3)]: page(200, 10)});
+
+  const {hashes, truncated} = await unreadTransactions({get, cache: {t205: []}, limit: 150});
+
+  assert.equal(hashes.length, 205);
+  assert.equal(truncated, false);
+});
+
+test('a refund stays on an agent’s record after it falls outside the newest transactions', async () => {
+  const {get} = getFrom({[pagePath(1)]: [{tx_hash: 'new'}, {tx_hash: 'kept'}], '/txs/new/redeemers': []});
+  const cache = {kept: [], old: [{agentIdentifier: 'agent', action: 3}]};
+
+  const {records} = await buildTrackRecords({get, cache});
+
+  assert.deepEqual(records, {agent: {completed: 0, refunded: 1, disputed: 0}});
+});
+
+test('a record kept from before empty ids were skipped does not count', () => {
+  assert.deepEqual(tally([{agentIdentifier: '', action: 0}]), {});
 });
 
 test('a transaction already read is not read again, and still counts', async () => {
-  const path = `/addresses/${ESCROW_CONTRACT}/transactions?order=desc&count=100&page=1`;
   const {get, calls} = getFrom({
-    [path]: [{tx_hash: 'old'}, {tx_hash: 'new'}],
+    [pagePath(1)]: [{tx_hash: 'new'}, {tx_hash: 'old'}],
     '/txs/new/redeemers': [{purpose: 'spend', tx_index: 0, redeemer_data_hash: 'withdraw'}],
     '/txs/new/utxos': {inputs: [input('aa', 0)]},
     '/scripts/datum/datum-aa': datumFor('agent'),
