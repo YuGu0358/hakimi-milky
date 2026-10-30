@@ -6,8 +6,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\"",
-    "offline": "node --env-file-if-exists=.env orchestrator/run-offline.mjs"
+    "test": "node --test \"shared/**/*.test.mjs\" \"orchestrator/**/*.test.mjs\" \"payments/**/*.test.mjs\" \"specialists/**/*.test.mjs\"",
+    "offline": "node --env-file-if-exists=.env orchestrator/run-offline.mjs",
+    "specialists": "node --env-file-if-exists=.env specialists/start.mjs",
+    "specialists:register": "node --env-file-if-exists=.env specialists/register.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "3.0.62",

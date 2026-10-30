@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {Proposal} from '../shared/schemas.mjs';
 import {formatPrice} from '../shared/money.mjs';
+import {stripFence} from '../shared/text.mjs';
 
 // The planner only proposes. It holds no payment credentials and cannot change the mandate,
 // so a hijacked planner can do no more than make proposals the guard will deny.
@@ -43,12 +44,6 @@ ${failures}
 ${JSON.stringify(table)}
 </table>`;
 }
-
-const stripFence = (text) =>
-  text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/, '');
 
 function parseReply(text) {
   try {
