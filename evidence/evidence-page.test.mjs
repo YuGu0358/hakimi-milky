@@ -83,6 +83,26 @@ test('a run that was not delivered says so', () => {
   assert.equal(summarize([line(0, 'mandate.confirmed'), line(1, 'run.failed')]).deliveredMinutes, null);
 });
 
+test('a count reads right for one and for many', () => {
+  const lines = [line(0, 'refund.withdrawn', {refs: {blockchainIdentifier: 'one'}}), line(1, 'run.delivered')];
+
+  const html = renderRun({run: RUN, mandate: null, lines});
+
+  assert.match(html, /1 refund back/);
+  assert.match(html, /0 hires/);
+});
+
+test('a reason that only repeats the chain state is left out, and a real one stays', () => {
+  const html = renderRun({
+    run: RUN,
+    mandate: null,
+    lines: [line(0, 'purchase.funds_locked', {reason: 'FundsLocked'}), line(1, 'acceptance.failed', {reason: 'A3_MISSING (HM-019)'})],
+  });
+
+  assert.ok(!html.includes('FundsLocked'));
+  assert.match(html, /A3_MISSING/);
+});
+
 test('the mandate shows its limits in plain amounts and the agents by name', () => {
   const html = renderRun({run: RUN, mandate: MANDATE, lines: [line(0, 'mandate.confirmed')]});
 

@@ -1,10 +1,11 @@
 import {spawn} from 'node:child_process';
 import {existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {setTimeout as sleep} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {acquireWorkerLock} from '../frontdesk/worker-lock.mjs';
 import {STALE_AFTER_MS, renderView} from './coworker-view.mjs';
-import {coworkerInfo, desktopNotify, isHealthy, keepAwake, projectServices, readCoworkerTasks, spawnLogged} from './services.mjs';
+import {coworkerInfo, desktopNotify, isHealthy, keepAwake, lockOwnerAlive, projectServices, readCoworkerTasks, spawnLogged} from './services.mjs';
 import {createSupervisor} from './supervisor.mjs';
 
 // npm run online          start the supervisor in the background
@@ -22,6 +23,8 @@ const LOG_PATH = join(DIRECTORY, 'supervisor.log');
 const DEFAULT_CHECK_MS = 15_000;
 const WATCH_DRAW_MS = 5_000;
 const WATCH_TASKS_MS = 30_000;
+const STOP_WAIT_MS = 45_000;
+const STOP_POLL_MS = 200;
 const USAGE = 'Usage: keep-online.mjs start | run | status | watch | stop';
 
 function loadConfig() {
@@ -79,6 +82,11 @@ function run() {
 }
 
 function startInBackground() {
+  if (lockOwnerAlive(LOCK_PATH)) {
+    console.error('The supervisor is already running. Use online:stop first if you want to restart it.');
+    process.exitCode = 1;
+    return;
+  }
   mkdirSync(DIRECTORY, {recursive: true});
   const logFile = openSync(LOG_PATH, 'a');
   const child = spawn(process.execPath, [SELF, 'run'], {detached: true, windowsHide: true, stdio: ['ignore', logFile, logFile], env: process.env});
@@ -110,13 +118,17 @@ function printStatus() {
 }
 
 // A file instead of a signal: on Windows a signal kills at once, with no chance to stop the services.
-function requestStop() {
-  if (!existsSync(LOCK_PATH)) {
+async function requestStop() {
+  if (!lockOwnerAlive(LOCK_PATH)) {
     console.log('The supervisor is not running.');
     return;
   }
   writeFileSync(STOP_PATH, '');
   console.log('Stop requested.');
+  // Waits, or a start right after this would find the old supervisor still there and give up.
+  const deadline = Date.now() + STOP_WAIT_MS;
+  while (lockOwnerAlive(LOCK_PATH) && Date.now() < deadline) await sleep(STOP_POLL_MS);
+  console.log(lockOwnerAlive(LOCK_PATH) ? 'It has not stopped yet. Check it with online:status.' : 'Stopped.');
 }
 
 // A panel to leave open in a terminal. Tasks come from Sokosumi, so they refresh less often.
@@ -146,7 +158,7 @@ const COMMANDS = Object.freeze({run, start: startInBackground, status: printStat
 try {
   const command = COMMANDS[process.argv[2] ?? 'start'];
   if (!command) throw new Error(USAGE);
-  command();
+  await command();
 } catch (error) {
   console.error(error.message);
   process.exit(1);

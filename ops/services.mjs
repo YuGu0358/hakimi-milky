@@ -103,7 +103,7 @@ function isProcessAlive(pid) {
   }
 }
 
-function lockOwnerAlive(lockFile) {
+export function lockOwnerAlive(lockFile) {
   if (!existsSync(lockFile)) return false;
   const pid = Number(readFileSync(lockFile, 'utf8'));
   return Number.isSafeInteger(pid) && pid > 0 && isProcessAlive(pid);

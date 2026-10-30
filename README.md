@@ -142,6 +142,7 @@ This is the paid job for the Cardano track. Task `01a18d23-4f8f-77a8-b71f-35843d
 | Table result | [e1c38c65…](https://preprod.cardanoscan.io/transaction/e1c38c65a5b42f4d9b160b11803800183d2a7b513bb58b270810f31125a2c2cd) |
 | Product texts result | [50b75cff…](https://preprod.cardanoscan.io/transaction/50b75cff9d025eecfc068f8b134ceda06ae77adfea2f8a0bbeea803ba11611a3) |
 | Front desk's result to the owner | [b4ba6a9f…](https://preprod.cardanoscan.io/transaction/b4ba6a9fc01ab4a12e9efbf72ce09aedea66624c6d6903626d1aeb8c412206fc) |
+| Seller collects, batched with other payments; `frontdesk/settlement.mjs` matched Sokosumi's receipt, the Payment Service and the chain | [53e61f78…](https://preprod.cardanoscan.io/transaction/53e61f78d4530ecc3efea7f301bd7e752837257a6ee54659aafab8c0e5721eeb) |
 
 ### Earlier paid tasks in a personal workspace
 

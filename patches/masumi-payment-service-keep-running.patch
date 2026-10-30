@@ -1,17 +1,19 @@
 diff --git a/src/index.ts b/src/index.ts
-index a90ad62..b9efacf 100644
+index a90ad62..b0f219b 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -1,5 +1,18 @@
+@@ -1,5 +1,20 @@
  import { setupTracing } from '@/tracing';
  
 +// got 11 can schedule a retry for a Blockfrost request that has already finished. Its timer then throws
-+// where no caller can catch it, which stops the whole service and its escrow jobs. Nothing waits on that
-+// request, so this one error is logged and ignored. Any other uncaught error still ends the process.
++// where no caller can catch it, and the new request it has just started has nobody listening, so if the
++// network is down that one throws too. Either would stop the whole service and its escrow jobs. Nothing
++// waits on these requests, so they are logged and ignored. Any other uncaught error still ends the process.
 +const GOT_RETRY_AFTER_SETTLED = 'The `onCancel` handler was attached after the promise settled.';
++const isOrphanedRequestError = (error: Error) => error.message === GOT_RETRY_AFTER_SETTLED || 'timings' in error;
 +process.on('uncaughtException', (error) => {
-+	if (error.message === GOT_RETRY_AFTER_SETTLED) {
-+		console.error('Ignored a retry for a finished request:', error.message);
++	if (isOrphanedRequestError(error)) {
++		console.error('Ignored an error from a request nobody is waiting for:', error.message);
 +		return;
 +	}
 +	console.error('Uncaught exception', error);

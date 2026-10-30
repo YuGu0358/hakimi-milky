@@ -14,6 +14,7 @@ const LOCAL = fileURLToPath(new URL('../.local/', import.meta.url));
 const RUNS_DIR = join(HERE, 'runs');
 const TX_URL = 'https://preprod.cardanoscan.io/transaction/';
 const IS_TX_HASH = /^[0-9a-f]{64}$/;
+const CHAIN_STATE = /^[A-Z][a-z]+(?:[A-Z][a-z]+)+$/; // FundsLocked, ResultSubmitted
 
 const JOB_LABELS = Object.freeze({normalize: 'Table', copy: 'Product texts'});
 const STEP_LABELS = Object.freeze({
@@ -63,6 +64,7 @@ export const escapeHtml = (value) =>
 const txLink = (hash, label) => (IS_TX_HASH.test(hash ?? '') ? `<a href="${TX_URL}${hash}">${escapeHtml(label ?? `${hash.slice(0, 8)}…`)}</a>` : '');
 
 const money = (amount) => formatPrice({unit: USDM_UNIT, amount: String(amount)});
+const counted = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 function verdictOf({decision, rule, code}) {
   if (decision === 'deny' || decision === 'veto') return `<span class="deny">${escapeHtml(code ?? decision)}</span>`;
@@ -84,7 +86,8 @@ function stepRow(line, startedAt, names) {
   const job = JOB_LABELS[line.subtask] ?? line.subtask ?? '';
   const what = STEP_LABELS[line.step] ?? line.step;
   const amount = line.amount ? money(line.amount.value) : '';
-  const details = [agentOf(line, names), line.reason, amount].filter(Boolean).map(escapeHtml).join(' · ');
+  const reason = CHAIN_STATE.test(line.reason ?? '') ? '' : line.reason; // the step already says it
+  const details = [agentOf(line, names), reason, amount].filter(Boolean).map(escapeHtml).join(' · ');
   return `<tr><td class="when">+${minutes} min</td><td>${escapeHtml(job)}</td><td>${escapeHtml(what)}</td><td>${verdictOf(line)}</td><td>${details}</td><td class="tx">${txLink(line.refs?.txHash)}</td></tr>`;
 }
 
@@ -105,9 +108,15 @@ export function summarize(lines) {
 function factsHtml(lines, mandate) {
   const {deliveredMinutes, refused, hires, ordered, refunds} = summarize(lines);
   const limits = mandate
-    ? [`Budget ${money(mandate.budget[USDM_UNIT])}`, `at most ${money(mandate.perHire[USDM_UNIT])} a hire`, `${mandate.maxHires} hires`, `allowed: ${mandate.allowlist.map(({name}) => name).join(', ')}`]
+    ? [`Budget ${money(mandate.budget[USDM_UNIT])}`, `at most ${money(mandate.perHire[USDM_UNIT])} a hire`, `at most ${counted(mandate.maxHires, 'hire')}`, `allowed: ${mandate.allowlist.map(({name}) => name).join(', ')}`]
     : [];
-  const facts = [deliveredMinutes === null ? 'Not delivered' : `Delivered in ${deliveredMinutes} min`, `${hires} hires, ${ordered} ordered`, `${refused} proposals refused`, `${refunds} refunds back`, ...limits];
+  const facts = [
+    deliveredMinutes === null ? 'Not delivered' : `Delivered in ${deliveredMinutes} min`,
+    `${counted(hires, 'hire')}, ${ordered} ordered`,
+    `${counted(refused, 'proposal')} refused`,
+    `${counted(refunds, 'refund')} back`,
+    ...limits,
+  ];
   return `<div class="facts">${facts.map((fact) => `<span>${escapeHtml(fact)}</span>`).join('')}</div>`;
 }
 

@@ -158,6 +158,33 @@ test('stop ends the supervisor and the services it started', async (t) => {
   await waitFor(async () => !(await answers(port)), 'the service to stop');
 });
 
+test('stop returns only once the supervisor has gone, so a start right after it works', async (t) => {
+  const {readStatus, command, directory} = await setup(t);
+  command('start');
+  await waitFor(() => readStatus()?.healthy, 'the service to answer');
+
+  const stopped = command('stop');
+
+  assert.match(stopped.stdout, /Stopped/);
+  assert.equal(existsSync(join(directory, 'supervisor.lock')), false);
+  const started = command('start');
+  assert.equal(started.status, 0);
+  assert.match(started.stdout, /started/);
+  await waitFor(() => readStatus()?.healthy, 'the service to answer again');
+});
+
+test('start says so when a supervisor is already running, instead of pretending', async (t) => {
+  const {readStatus, command} = await setup(t);
+  command('start');
+  await waitFor(() => readStatus()?.healthy, 'the service to answer');
+
+  const again = command('start');
+
+  assert.equal(again.status, 1);
+  assert.match(again.stderr, /already running/);
+  assert.doesNotMatch(again.stdout, /started/);
+});
+
 test('a second supervisor refuses to start', async (t) => {
   const {readStatus, run} = await setup(t);
   const first = run();
