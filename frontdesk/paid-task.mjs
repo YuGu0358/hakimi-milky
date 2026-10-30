@@ -57,7 +57,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
    const nonce=randomBytes(10).toString('hex');const now=Date.now();
    const body={network:'Preprod',agentIdentifier:r.agentIdentifier,paymentSourceType:'Web3CardanoV2',supportedPaymentSourceIndex:r.supportedPaymentSourceIndex,
     inputHash:taskHash(state.input),identifierFromPurchaser:nonce,RequestedFunds:[{amount:'1000000',unit:USDM}],
-    payByTime:new Date(now+5*MINUTE).toISOString(),submitResultTime:new Date(now+20*MINUTE).toISOString(),unlockTime:new Date(now+36*MINUTE).toISOString(),externalDisputeUnlockTime:new Date(now+52*MINUTE).toISOString(),metadata:JSON.stringify({taskId:task.id})};
+    payByTime:new Date(now+10*MINUTE).toISOString(),submitResultTime:new Date(now+45*MINUTE).toISOString(),unlockTime:new Date(now+61*MINUTE).toISOString(),externalDisputeUnlockTime:new Date(now+77*MINUTE).toISOString(),metadata:JSON.stringify({taskId:task.id})};
    if(!body.agentIdentifier||!Number.isInteger(body.supportedPaymentSourceIndex))throw new Error('Registration identifier and source index are required');
    state=await persist(task,state,{stage:'terms-pending',nonce,request:body});
    const payment=await mps('/api/v1/payment',body);

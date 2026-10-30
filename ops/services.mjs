@@ -25,7 +25,7 @@ function readSetting(values, name) {
   return value && SHELL_SAFE.test(value) ? value : null;
 }
 
-const coworkerDirectory = (env) => env.COWORKER_DIR ?? join(WORKSPACE, 'tum-hackathon-quickstart');
+const coworkerDirectory = (env) => env.COWORKER_DIR ?? join(ROOT, 'frontdesk');
 
 export function coworkerInfo(env = process.env) {
   const dir = coworkerDirectory(env);
@@ -49,7 +49,7 @@ export async function readCoworkerTasks({dir, id, organizationSlug}) {
   return JSON.parse(stdout).tasks;
 }
 
-// The default layout is the one on the demo machine: the two checkouts sit beside this repo.
+// The default layout is the one on the demo machine: the Payment Service checkout sits beside this repo.
 export function projectServices(env = process.env) {
   const {dir: coworkerDir, id: coworkerId} = coworkerInfo(env);
   const mpsDir = env.MPS_DIR ?? join(WORKSPACE, 'masumi-payment-service');
@@ -65,6 +65,7 @@ export function projectServices(env = process.env) {
     },
     {name: 'coworker-agent', cwd: coworkerDir, command: 'npm start', urls: ['http://127.0.0.1:21949/'], graceMs: SLOW_BOOT_MS},
     {name: 'coworker-worker', cwd: coworkerDir, command: 'npm run worker', lockFile: join(coworkerDir, '.local', 'worker.lock')},
+    {name: 'coworker-api', cwd: coworkerDir, command: 'npm run api', urls: ['http://127.0.0.1:21950/availability']},
     {
       name: 'specialists',
       cwd: ROOT,

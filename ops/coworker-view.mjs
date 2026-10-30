@@ -9,6 +9,7 @@ const FINISHED_TASKS = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'CANCELED'])
 const PARTS = Object.freeze([
   ['coworker-agent', 'Agent'],
   ['coworker-worker', 'Worker'],
+  ['coworker-api', 'Seller API'],
   ['sokosumi-login', 'Login'],
   ['payment-service', 'Payment Service'],
   ['specialists', 'Specialists'],

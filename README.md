@@ -83,9 +83,9 @@ npm run online:status
 npm run online:stop
 ```
 
-`online` starts a small supervisor in the background. It watches the Payment Service, the Coworker's agent and worker, and the three specialists. What is down gets started, what stops answering gets restarted, and a service already running by hand is left alone until it dies. It also checks the Sokosumi login, which only a person can renew, and keeps a Mac from idle sleep. A closed lid still sleeps the machine. Logs go to `.local/online/`.
+`online` starts a small supervisor in the background. It watches the Payment Service, the Coworker's agent, worker and seller API, and the three specialists. What is down gets started, what stops answering gets restarted, and a service already running by hand is left alone until it dies. It also checks the Sokosumi login, which only a person can renew, and keeps a Mac from idle sleep. A closed lid still sleeps the machine. Logs go to `.local/online/`.
 
-Run it from a shell where Node 24 is on the PATH. It expects the Coworker in `../tum-hackathon-quickstart` and the Payment Service in `../masumi-payment-service`; set `COWORKER_DIR` or `MPS_DIR` to use other folders. To demo a refund, stop it and start it again with `FAULT=drop_rows:2 npm run online`. On Windows it has been tested only with a small test server: set the power plan so the machine does not sleep.
+Run it from a shell where Node 24 is on the PATH. It expects the Coworker in `frontdesk/` and the Payment Service in `../masumi-payment-service`; set `COWORKER_DIR` or `MPS_DIR` to use other folders. To demo a refund, stop it and start it again with `FAULT=drop_rows:2 npm run online`. On Windows it has been tested only with a small test server: set the power plan so the machine does not sleep.
 
 ### Payment Service patch
 
