@@ -1,0 +1,35 @@
+[
+  {
+    "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b6d6f636b2d7374616e64617264",
+    "sellerVkey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "name": "Mock Standard Normalizer",
+    "apiBaseUrl": "http://127.0.0.1:4101",
+    "role": "normalize",
+    "pricingType": "Fixed",
+    "price": {"unit": "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d", "amount": "300000"},
+    "supportedPaymentSourceIndex": 0,
+    "tags": ["table-normalization"]
+  },
+  {
+    "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b6d6f636b2d6368656170",
+    "sellerVkey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "name": "Mock Cheap Normalizer",
+    "apiBaseUrl": "http://127.0.0.1:4102",
+    "role": "normalize",
+    "pricingType": "Fixed",
+    "price": {"unit": "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d", "amount": "200000"},
+    "supportedPaymentSourceIndex": 0,
+    "tags": ["table-normalization"]
+  },
+  {
+    "agentIdentifier": "67ab0c92c4ac1610895a1c965ee50aba41a8f1513b15240723b3bd0b6d6f636b2d636f7079",
+    "sellerVkey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "name": "Mock Copywriter",
+    "apiBaseUrl": "http://127.0.0.1:4103",
+    "role": "copy",
+    "pricingType": "Fixed",
+    "price": {"unit": "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d", "amount": "200000"},
+    "supportedPaymentSourceIndex": 0,
+    "tags": ["product-copy"]
+  }
+]

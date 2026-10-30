@@ -1,0 +1,22 @@
+[
+  {"sku": "HM-001", "name": " Oat Milk Barista 1L", "category": "Milk", "unit": "pcs", "price": "€3.20", "stock": 120, "note": ""},
+  {"sku": "HM-002", "name": "Whole Milk UHT 1L ", "category": "MILK", "unit": "PCS", "price": "2.10", "stock": 200, "note": ""},
+  {"sku": "HM-003", "name": "Assam Black Tea", "category": "Tea", "unit": "kg", "price": "€18.50", "stock": 40, "note": ""},
+  {"sku": "HM-004", "name": "Jasmine Green Tea", "category": "tea ", "unit": "KG", "price": "21.00 EUR", "stock": 25, "note": ""},
+  {"sku": "HM-005", "name": "Oolong Tea", "category": "TEA", "unit": "kg", "price": "24.90", "stock": 15, "note": ""},
+  {"sku": "HM-006", "name": "Tapioca Pearls", "category": "Topping", "unit": "kg", "price": "€4.75", "stock": 80, "note": ""},
+  {"sku": "HM-007", "name": "Popping Boba Mango", "category": "topping", "unit": "box", "price": "€12.50", "stock": 30, "note": ""},
+  {"sku": "HM-008", "name": "Grass Jelly", "category": "TOPPING", "unit": "Box", "price": "9.80", "stock": 18, "note": ""},
+  {"sku": "HM-009", "name": "Brown Sugar Syrup", "category": "Syrup", "unit": "box", "price": "€15.00", "stock": 22, "note": ""},
+  {"sku": "HM-010", "name": "Vanilla Syrup", "category": "syrup", "unit": "BOX", "price": "13.40 EUR", "stock": 12, "note": ""},
+  {"sku": "HM-011", "name": "Taro Powder", "category": "Powder", "unit": "kg", "price": "€11.30", "stock": 35, "note": ""},
+  {"sku": "HM-012", "name": "Matcha Powder", "category": "POWDER", "unit": "kg", "price": "39.00", "stock": 10, "note": ""},
+  {"sku": "HM-013", "name": "Cup 500ml", "category": "Packaging", "unit": "piece", "price": "0.12", "stock": 5000, "note": ""},
+  {"sku": "HM-014", "name": "Cup 700ml", "category": "packaging", "unit": "pieces", "price": "€0.15", "stock": 4000, "note": ""},
+  {"sku": "HM-015", "name": "Flat Lid", "category": "Packaging", "unit": "PCS", "price": "0.04", "stock": 6000, "note": ""},
+  {"sku": "HM-016", "name": "Dome Lid", "category": "packaging ", "unit": "pcs", "price": "0.06", "stock": 3000, "note": ""},
+  {"sku": "HM-017", "name": "Wide Straw", "category": "Packaging", "unit": "pcs", "price": "€0.02", "stock": 8000, "note": "paper"},
+  {"sku": "HM-018", "name": "Sealing Film", "category": "Packaging", "unit": "m", "price": "0.30", "stock": 900, "note": "sold by the metre"},
+  {"sku": "HM-019", "name": "Cup Carrier", "category": "Packaging", "unit": "piece", "price": "0.18", "stock": 700, "note": ""},
+  {"sku": "HM-020", "name": "Cleaning Tablets", "category": "Supplies", "unit": "box", "price": "€7.90", "stock": 14, "note": ""}
+]
