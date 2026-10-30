@@ -1,10 +1,10 @@
-import {execFileSync} from 'node:child_process';
-import {dirname,join,isAbsolute} from 'node:path';
+import {runCommand} from './sokosumi-cli.mjs';
+import {basename,dirname,join,isAbsolute} from 'node:path';
 import {pathToFileURL} from 'node:url';
 let loaded;
-export function sokosumiRoot(run=execFileSync){
+export function sokosumiRoot(run=runCommand){
  const skillsPath=run('sokosumi',['skills','path'],{encoding:'utf8',timeout:30000}).trim();
- if(!isAbsolute(skillsPath)||!skillsPath.endsWith('/skills'))throw new Error('sokosumi skills path returned an invalid package path');
+ if(!isAbsolute(skillsPath)||basename(skillsPath)!=='skills')throw new Error('sokosumi skills path returned an invalid package path');
  return join(dirname(skillsPath),'dist','src');
 }
 export async function loadSokosumiRuntime(){

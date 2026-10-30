@@ -12,9 +12,10 @@
     "test": "node --env-file-if-exists=.env --test *.test.mjs"
   },
   "dependencies": {
-    "eve": "0.71.0",
+    "@ai-sdk/openai-compatible": "3.0.62",
     "ai": "7.0.127",
-    "zod": "4.6.5",
-    "@ai-sdk/openai-compatible": "3.0.62"
+    "cross-spawn": "7.0.6",
+    "eve": "0.71.0",
+    "zod": "4.6.5"
   }
 }
