@@ -114,9 +114,20 @@ The second one keeps the service running. got 11, which the Blockfrost client us
 
 All of this used test tokens, and every agent we hired is our own.
 
-### A paid task through Sokosumi
+### A paid task through Sokosumi, with the front desk hiring
 
-Task `01a18cbb-ebaa-74ea-b448-d110ca18e300` for Coworker `01a189e8-8258-707e-97c5-c06718385eb7`. It ran in a personal workspace, because the TUM workspace had no credits when we tried. The owner paid 1 tUSDM into escrow. The model answered this one alone, before the front desk could hire.
+Task `01a18cf5-3d8c-73a0-a77d-ca9260026438` for Coworker `01a189e8-8258-707e-97c5-c06718385eb7`, with a 20-row table. The owner paid 1 tUSDM into escrow. The front desk hired the cheap normalizer and the copywriter for 0.4 tUSDM, checked both results and delivered 5.4 minutes after it started the task. The text posted on Sokosumi hashes to the result hash on chain. The owner's payment unlocks at 15:18, so the seller's receipt is still to come.
+
+| Step | Transaction |
+| --- | --- |
+| Owner's 1 tUSDM locked | [7ddfbe9b…](https://preprod.cardanoscan.io/transaction/7ddfbe9b519672da47e620bf6afa7bf1ed8643db308765b3274512414a91c1b7) |
+| Both hires locked in one transaction | [00262571…](https://preprod.cardanoscan.io/transaction/002625711ab8e26ea5fa6ef8b51e64a705ec2a1a758748ea01d548e1a4b64774) |
+| Both specialists' results | [bcae759d…](https://preprod.cardanoscan.io/transaction/bcae759ddc1b1a34c25461c74428d2b20fbdab5a05b496d473efe0207a4b29d7) |
+| Front desk's result to the owner | [6831d941…](https://preprod.cardanoscan.io/transaction/6831d94105ca84be3716ccacab2e0998babc78c5982c76266d0a68cfaf3e0d52) |
+
+### The first paid task through Sokosumi
+
+Task `01a18cbb-ebaa-74ea-b448-d110ca18e300`, answered by the model alone, before the front desk could hire. Both paid tasks ran in a personal workspace, because the TUM workspace had no credits when we tried.
 
 | Step | Transaction |
 | --- | --- |
