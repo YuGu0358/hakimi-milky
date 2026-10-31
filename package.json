@@ -20,6 +20,7 @@
     "owner": "node --env-file-if-exists=.env orchestrator/run-owner.mjs",
     "registry:connect-older": "node --env-file-if-exists=.env ops/connect-older-contract.mjs",
     "third-party": "node --env-file-if-exists=.env orchestrator/run-third-party.mjs",
+    "refund": "node frontdesk/answer-refund.mjs",
     "registry": "node --env-file-if-exists=.env registry/run-catalog.mjs",
     "registry:allow": "node --env-file-if-exists=.env registry/run-allow.mjs",
     "evidence": "node evidence/evidence-page.mjs",
