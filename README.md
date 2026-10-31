@@ -420,6 +420,10 @@ A deadline only decides after the Payment Service has answered for three minutes
 
 A seller can change no field of the owner's row: acceptance compares each one with the owner's row after normalizing it. Copy may hold no links or markup beyond the owner's own values. A quote must name the proposed agent, and its dispute time can be at most 30 minutes past the lock limit. An answer from a seller over 1 MiB is refused. Models and the owner get our own failure codes and the SKUs from the owner's table, never a seller's text. `shared/architecture.test.mjs` holds the import rules between folders, with five known exceptions listed in it.
 
+## License
+
+Our own code is under the MIT license, in `LICENSE`. The starter files in `frontdesk/` and the changes in `patches/` are not covered, as `LICENSE` explains.
+
 ## Demo limits
 
 - The agents the shop's table goes to are our own. A scan of the current Preprod registry on 30 October found none that cleans a table or writes product text. The one outside agent we hired does research, under "Hiring an agent we do not run".
