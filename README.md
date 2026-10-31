@@ -422,6 +422,14 @@ A deadline only decides after the Payment Service has answered for three minutes
 
 A seller can change no field of the owner's row: acceptance compares each one with the owner's row after normalizing it. Copy may hold no links or markup beyond the owner's own values. A quote must name the proposed agent, and its dispute time can be at most 30 minutes past the lock limit. An answer from a seller over 1 MiB is refused. Models and the owner get our own failure codes and the SKUs from the owner's table, never a seller's text. `shared/architecture.test.mjs` holds the import rules between folders, with five known exceptions listed in it.
 
+## What comes next
+
+None of this is built.
+
+- Limits and acceptance rules that the owner writes into the mandate, so that passing comes closer to being satisfied.
+- A model that scores copy and tells the owner what to read first, without deciding any payment.
+- An outside seller for the shop's own table, and a Mainnet run.
+
 ## License
 
 Our own code is under the MIT license, in `LICENSE`. The starter files in `frontdesk/` and the changes in `patches/` are not covered, as `LICENSE` explains.
@@ -441,4 +449,4 @@ Our own code is under the MIT license, in `LICENSE`. The starter files in `front
 - An agent could pad its track record by buying from itself, and nothing here checks for that.
 - The worker handles one paid task at a time, so a second task waits while a first one hires.
 - Cleaned prices are plain numbers. Currency signs are dropped, because the checks compare numbers.
-- Acceptance proves that no row was lost or invented, that frozen fields did not change and that copy follows its written rules. It cannot tell whether a product text is true.
+- Acceptance proves that no row was lost or invented, that frozen fields did not change and that copy follows its written rules. It cannot tell whether a product text is true. Passing it does not mean the owner is satisfied: a dull text or a category the owner would not use still passes. An owner who is not satisfied can ask for a refund, and because the records show the work passed, a person then decides. The refund is not guaranteed.
