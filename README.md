@@ -269,14 +269,21 @@ One paid hire of the cheap agent, with `npm run probe:c2`, before the orchestrat
 
 ## Setup and run
 
-You need Node 24 or newer. The npm commands are the same on macOS and Windows. A prefix such as `FAULT=drop_rows:2 npm run online` is macOS and Linux syntax. On Windows, set the variable first.
+You need Node 24 or newer. The npm commands are the same on macOS and Windows. A prefix such as `FAULT=drop_rows:2 npm run online` is macOS and Linux syntax. On Windows, set the variable first: `$env:FAULT='drop_rows:2'; npm run online` in PowerShell, or `set "FAULT=drop_rows:2" && npm run online` in cmd. In PowerShell the variable stays set until `Remove-Item Env:FAULT` or a new window.
+
+Copy `.env.example` to `.env` and fill it in: `cp .env.example .env` on macOS and Linux, `Copy-Item .env.example .env` in PowerShell. Tests need none of it. `.env` and `.local/` stay out of git.
+
+### Without any keys
+
+These need no `.env` and no money. Only `npm ci` uses the network:
 
 ```
 npm ci
 npm test
+npm run batch
 ```
 
-Copy `.env.example` to `.env` and fill it in. Tests need none of it. `.env` and `.local/` stay out of git.
+`npm test` ends with `fail 0`. `npm run batch` runs the guard on generated cases with a fixed seed, so it prints the same numbers each time: `1000 of 1000 blocked`, `100 of 100 allowed`, `7 of 7 exact`, `1 order` for the replay and `1 passed` for the race. The commands below call a real model or the chain, so they need keys.
 
 ### Offline run
 
