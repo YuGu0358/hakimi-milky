@@ -3,6 +3,7 @@ import {createHirer} from './hire.mjs';
 import {createLedger} from './ledger.mjs';
 import {loadOrCreateMandate} from './mandate.mjs';
 import {createPurchaser} from './purchaser.mjs';
+import {withOwnerDecisions} from './owner-decisions.mjs';
 import {orchestrate} from './run.mjs';
 
 // Wires one task from its parts. Files are named by task id, so a restart with the same id
@@ -34,7 +35,7 @@ export function assembleRun({
   });
   const ledger = createLedger({path: join(directory, `${taskId}-evidence.jsonl`), taskId, clock});
   const purchaser = createPurchaser({mandate, ledger, purchase: payments.purchase, getPurchase: payments.getPurchase, clock});
-  const hirer = createHirer({mandate, ledger, payments, purchaser, review, clock, sleep, pollMs});
+  const hirer = createHirer({mandate, ledger, payments, purchaser, review: withOwnerDecisions(review, ledger), clock, sleep, pollMs});
   return {
     mandate,
     ledger,

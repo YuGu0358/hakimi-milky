@@ -31,6 +31,7 @@ async function main([name = 'c1', givenTaskId]) {
 
   const result = await run();
   console.log(result.ok ? 'Delivered. Waiting for the money to settle.' : `Not delivered: ${result.reason}. Waiting for the money to settle.`);
+  if (result.ownerMustDecide) console.log(`The owner can answer: npm run owner -- ${taskId} approve, then npm run live -- ${name} ${taskId}`);
   await result.settled;
   printEvidence(ledger.lines());
   console.log(`evidence: ${taskId}-evidence.jsonl`);
