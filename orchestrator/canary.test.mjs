@@ -50,7 +50,7 @@ test('stranger text in a pinned agent never reaches the planner or the reviewer'
   const seen = JSON.stringify([prompts, states, result.reason ?? '']);
   assert.ok(prompts.some((p) => p.includes(PIN.name)), 'the owner alias is shown');
   assert.equal(seen.includes(CANARY), false);
-  assert.ok(prompts.some((p) => p.includes('job_failed: JOB_FAILED')));
+  assert.ok(prompts.some((p) => p.includes(`job_failed (${PIN.name}): JOB_FAILED`)));
 });
 
 test('a price unit outside the budget keeps the agent off the list', async () => {
