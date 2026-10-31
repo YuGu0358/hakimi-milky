@@ -89,7 +89,7 @@ What this does not show:
 
 ## What has run
 
-Every check here except C7 ran on Preprod with test tokens, and every agent we hired is our own. C7 needs no chain. [`evidence/index.html`](evidence/index.html) shows the main runs step by step, built from the raw records in `evidence/runs/`. GitHub shows that file as source, so clone the repo and open it in a browser.
+Every check here except C7 ran on Preprod with test tokens. Every agent hired in these checks is our own. The one outside hire has its own section above. C7 needs no chain. [`evidence/index.html`](evidence/index.html) shows the main runs step by step, built from the raw records in `evidence/runs/`. GitHub shows that file as source, so clone the repo and open it in a browser.
 
 Each run in `evidence/runs/` has `<task>-evidence.jsonl`, every step in order, and `<task>-mandate.json`, its limits. C0 is task `01a18d23-…`, and its `-settlement.json` is the seller's receipt. C6 also has `-crash-test.log`. `rejections.json` is C5. `c7-report.json` and `redteam-report.json` are C7. `track-records.json` is the chain read behind the track record, for every agent that has one. The records of the probe runs, the personal-workspace tasks and `desk-smoke-1793363890687` are not published, so for those you can only check the transactions on chain.
 
@@ -432,6 +432,7 @@ Our own code is under the MIT license, in `LICENSE`. The starter files in `front
 - The specialist agents listen on 127.0.0.1, so a demo runs on one machine.
 - A specialist agrees to every refund on its own. A real seller could dispute.
 - A failure of the worker between a failed check and the refund request is only repaired by starting the same task again. Nothing sweeps for owed refunds on its own.
+- The front desk does not act on an owner's refund request. It only refunds specialists that fail its checks. If an owner asks for a refund on the front desk's own job, nothing agrees to it and nothing tells anyone, so the money waits for the dispute time.
 - A refund has to be requested at least 5 minutes before the escrow unlocks. If the machine is down past that, a seller whose result fails its check can still collect.
 - Jev has not vetoed on Preprod. It has approved, and it has sent one switch of agents to the owner, in two C2 runs. Its vetoes are in C7.
 - An agent could pad its track record by buying from itself, and nothing here checks for that.
