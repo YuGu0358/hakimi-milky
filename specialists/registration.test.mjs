@@ -50,14 +50,14 @@ function setup(admin = fakeAdmin(), options = {}) {
     tokenPath: join(directory, 'nested', 'mps-runtime.env'),
     allowlistPath: join(directory, 'nested', 'allowlist.json'),
   };
-  const registrar = createRegistrar({request: admin.request, author: 'Hakimi Milky', ...paths, ...options});
+  const registrar = createRegistrar({request: admin.request, author: 'Mission: Payable', ...paths, ...options});
   return {admin, registrar, ...paths};
 }
 
 const callsTo = (admin, path) => admin.calls.filter((call) => call.path === path);
 
 test('the registration body has a fixed price with no decimals, inside the V2 payment source', () => {
-  const body = buildRegistrationBody({profile: PROFILES.standard, walletVkey: WALLET.walletVkey, contractAddress: CONTRACT, author: 'Hakimi Milky'});
+  const body = buildRegistrationBody({profile: PROFILES.standard, walletVkey: WALLET.walletVkey, contractAddress: CONTRACT, author: 'Mission: Payable'});
 
   const [source] = body.supportedPaymentSources;
   assert.deepEqual(source.pricing, {pricingType: 'Fixed', fixed: [{asset: USDM_UNIT, amount: '300000'}]});
@@ -66,12 +66,12 @@ test('the registration body has a fixed price with no decimals, inside the V2 pa
   assert.equal('AgentPricing' in body, false);
   assert.equal(body.apiBaseUrl, 'http://127.0.0.1:4101');
   assert.equal(body.sellingWalletVkey, WALLET.walletVkey);
-  assert.equal(body.Author.name, 'Hakimi Milky');
+  assert.equal(body.Author.name, 'Mission: Payable');
 });
 
 for (const profile of Object.values(PROFILES)) {
   test(`${profile.id}: name, description and tags fit the registry limits`, () => {
-    const body = buildRegistrationBody({profile, walletVkey: WALLET.walletVkey, contractAddress: CONTRACT, author: 'Hakimi Milky'});
+    const body = buildRegistrationBody({profile, walletVkey: WALLET.walletVkey, contractAddress: CONTRACT, author: 'Mission: Payable'});
 
     assert.ok(body.name.length <= 250);
     assert.ok(body.description.length <= 250);

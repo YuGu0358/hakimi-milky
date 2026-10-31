@@ -6,7 +6,7 @@ A shop owner hands an agent a data job whose acceptance rules can be written dow
 
 Built during the TUM Blockchain & AI Hackathon, 30–31 October 2026.
 
-This project was first called Hakimi Milky. Its agents on Preprod keep the names they registered under, so the front desk appears as Hakimi Milky on Sokosumi and in the run records, and the specialists as Hakimi Table Normalizer, Hakimi Budget Normalizer and Hakimi Copywriter. Changing those names would mean registering again, with new identifiers and no track record. The repository keeps its address too.
+This project was first called Hakimi Milky. The agents registered on chain keep the names they registered under, because changing them would mean registering again, with new identifiers and no track record: the front desk as Hakimi Milky, and the specialists as Hakimi Table Normalizer, Hakimi Budget Normalizer and Hakimi Copywriter. Those names also appear in the run records, which we do not rewrite.
 
 **The paid job for the Cardano track:** task `01a18d23-4f8f-77a8-b71f-35843d6000ae` in the TUM-Hackathon workspace. [Its transactions and the seller's receipt are here](#c0-a-paid-job-in-the-tum-workspace-with-the-front-desk-hiring).
 
@@ -383,12 +383,12 @@ Run it from a shell where Node 24 is on the PATH. It expects the Coworker in `fr
 
 ### Payment Service patches
 
-Run the Payment Service with all three of these. None of them changes any contract code. Run the commands from this repo's folder. They expect the two folders side by side, named `hakimi-milky` and `masumi-payment-service`.
+Run the Payment Service with all three of these. None of them changes any contract code. Run the commands from this repo's folder. They expect the two folders side by side, named `mission-payable` and `masumi-payment-service`.
 
 ```
-git -C ../masumi-payment-service apply ../hakimi-milky/patches/masumi-payment-service-refund-result-hash.patch
-git -C ../masumi-payment-service apply ../hakimi-milky/patches/masumi-payment-service-keep-running.patch
-git -C ../masumi-payment-service apply ../hakimi-milky/patches/masumi-payment-service-loopback-and-quiet-log.patch
+git -C ../masumi-payment-service apply ../mission-payable/patches/masumi-payment-service-refund-result-hash.patch
+git -C ../masumi-payment-service apply ../mission-payable/patches/masumi-payment-service-keep-running.patch
+git -C ../masumi-payment-service apply ../mission-payable/patches/masumi-payment-service-loopback-and-quiet-log.patch
 ```
 
 The first one is needed or a refund for a purchase that already has a result is never collected. When a seller authorizes a refund, the contract empties the result hash. The service stores `new hash ?? old hash` on the purchase, so the empty value is overwritten with the old one, and its job that collects refunds only picks purchases with no hash. The patch keeps the empty value.

@@ -34,7 +34,7 @@ test('runCommand throws with the exit code and stderr when the CLI fails', () =>
 });
 
 test('runCommand throws when the command does not exist', () => {
-  assert.throws(() => runCommand('no-such-command-hakimi', ['x']));
+  assert.throws(() => runCommand('no-such-command-mission', ['x']));
 });
 
 test('sokosumiRoot accepts a skills path in the native format of this system', () => {
