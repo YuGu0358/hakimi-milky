@@ -161,7 +161,7 @@ export function createHirer({
     }
     const reason = summarize(verdict.failures);
     recordOnce(ctx, 'acceptance.failed', {reason, detail: {failures: verdict.failures}});
-    return {status: 'failed', subtask: ctx.subtask, reason, failures: verdict.failures, watch: refundFlow(ctx)};
+    return {status: 'failed', subtask: ctx.subtask, agent: ctx.listing?.name, reason, failures: verdict.failures, watch: refundFlow(ctx)};
   }
 
   async function sellerNoShow(ctx) {
@@ -171,7 +171,7 @@ export function createHirer({
     const watch = pollUntil(ctx, refunded, ctx.quote.submitResultTime + NODE_REFUND_WAIT_MS).catch(() => null).then((view) => {
       if (!view) record(ctx, 'refund.stuck', {reason: 'The node has not refunded the no-show yet'});
     });
-    return {status: 'failed', subtask: ctx.subtask, code: 'SELLER_NO_SHOW', reason, watch};
+    return {status: 'failed', subtask: ctx.subtask, agent: ctx.listing?.name, code: 'SELLER_NO_SHOW', reason, watch};
   }
 
   async function followPurchase(ctx) {
@@ -199,7 +199,7 @@ export function createHirer({
       quote = await payments.startJob(listing, job, nonce);
     } catch (error) {
       record(started, 'job.failed', {reason: error.message});
-      return {status: 'job_failed', code: 'JOB_FAILED', reason: `${listing.name} did not take the job: ${error.message}`};
+      return {status: 'job_failed', agent: listing.name, code: 'JOB_FAILED', reason: `${listing.name} did not take the job: ${error.message}`};
     }
     const ctx = {...started, quote, price: listing.price ?? proposal.maxPrice};
     record(ctx, 'job.started');

@@ -7,7 +7,7 @@ import {createHirer} from './hire.mjs';
 import {createLedger} from './ledger.mjs';
 import {createMandate} from './mandate.mjs';
 import {createPurchaser} from './purchaser.mjs';
-import {mergeDeliverable, orchestrate} from './run.mjs';
+import {mergeDeliverable, orchestrate, recordsFromLedger, withTrackRecord} from './run.mjs';
 import {MINUTE_MS, USDM_UNIT} from '../shared/constants.mjs';
 import {PaymentsError} from '../shared/errors.mjs';
 import {jobPrompt} from '../shared/schemas.mjs';
@@ -575,6 +575,27 @@ test('an agent on the list that cannot be hired any more is named in the evidenc
   const [line, ...rest] = linesOf(ledger, 'agent.unavailable');
   assert.equal(rest.length, 0);
   assert.equal(line.detail.agentIdentifier, standard.agentIdentifier);
+});
+
+test('after a failed hire the planner is told who failed, under the name the owner gave', async () => {
+  const {go, planner} = world({
+    faults: {dropRows: 2},
+    script: {normalize: [propose(cheap, 'normalize'), propose(standard, 'normalize')], copy: [propose(copy, 'copy')]},
+  });
+
+  await go();
+
+  const second = planner.calls.filter(({subtask}) => subtask === 'normalize')[1];
+  assert.ok(second.feedback.some((item) => item.includes(cheap.name) && item.includes('A3_MISSING')));
+});
+
+test('a refund in this run adds to what the chain already says about the agent', async () => {
+  const records = {[cheap.agentIdentifier]: {completed: 7, refunded: 3, disputed: 0}};
+  const state = {purchases: {one: {terms: {agentIdentifier: cheap.agentIdentifier}, status: 'acceptance_failed'}}};
+
+  const merged = withTrackRecord(cheap, records, recordsFromLedger(state));
+
+  assert.deepEqual(merged.trackRecord, {completed: 7, refunded: 4});
 });
 
 test('the run only asks the registry for the agents on the list', async () => {

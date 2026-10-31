@@ -17,8 +17,9 @@ export function mergeDeliverable(normalizedText, copyText) {
 const OWN_WORDS = new Set(['vetoed', 'gave_up', 'escalated']);
 
 const describe = (outcome, ownerKeys) => {
-  if (outcome.failures) return `${outcome.status}: ${failureText(outcome.failures, ownerKeys)}`;
-  return [outcome.status, outcome.code, OWN_WORDS.has(outcome.status) ? outcome.reason : null].filter(Boolean).join(': ');
+  const who = outcome.agent ? `${outcome.status} (${outcome.agent})` : outcome.status;
+  if (outcome.failures) return `${who}: ${failureText(outcome.failures, ownerKeys)}`;
+  return [who, outcome.code, OWN_WORDS.has(outcome.status) ? outcome.reason : null].filter(Boolean).join(': ');
 };
 
 const watchesOf = (outcomes) => outcomes.flatMap((outcome) => (outcome?.watch ? [outcome.watch] : []));
@@ -40,15 +41,16 @@ export function recordsFromLedger(state) {
   }, {});
 }
 
-function withTrackRecord(listing, chainRecords, localRecords) {
+// The chain's numbers come from a read before this run started, so what the run saw itself adds to them.
+export function withTrackRecord(listing, chainRecords, localRecords) {
   const chain = chainRecords[listing.agentIdentifier];
   const local = localRecords[listing.agentIdentifier];
   if (!chain && !local) return listing;
   return {
     ...listing,
     trackRecord: {
-      completed: Math.max(chain?.completed ?? 0, local?.completed ?? 0),
-      refunded: Math.max(chain?.refunded ?? 0, local?.refunded ?? 0),
+      completed: (chain?.completed ?? 0) + (local?.completed ?? 0),
+      refunded: (chain?.refunded ?? 0) + (local?.refunded ?? 0),
     },
   };
 }
