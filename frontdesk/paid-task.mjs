@@ -7,6 +7,8 @@ import {taskTarget,assertTaskTarget,verifyRuntimeTask} from './task-target.mjs';
 const MINUTE=60*1000;
 const MAX_TELL_TRIES=3;
 const REFUND_ASKED=['Disputed','RefundRequested'];
+const SAMPLE_SHARE=0.2;
+const SAMPLE_MAX_CHARS=400;
 const savedRefundAnswer=(taskId)=>{const path=`.local/${taskId}-refund-answer.json`;return existsSync(path)?JSON.parse(readFileSync(path,'utf8')).answer:null;};
 export const USDM='16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d';
 export function taskHash(text){return createHash('sha256').update(text,'utf8').digest('hex')}
@@ -28,12 +30,20 @@ export function purchasePayload(payment,nonce,registration){
  Amounts:payment.RequestedFunds.map(({amount,unit})=>({amount,unit})),
  PaymentSource:{network:'Preprod',smartContractAddress:payment.PaymentSource.smartContractAddress,policyId:payment.PaymentSource.policyId}};
 }
+// Staged delivery: the owner sees a sample and the hash on chain, and the full text once the seller is paid.
+export function sampleOf(result){
+ const chars=Array.from(result);
+ return chars.slice(0,Math.min(SAMPLE_MAX_CHARS,Math.floor(chars.length*SAMPLE_SHARE))).join('');
+}
+// The model that answers comments has seen the full text, so it stays quiet until the text is released.
+export function fullTextHeldBack(state){return Boolean(state.paid?.staged)&&!['settled','refunded'].includes(state.paid.stage);}
+const stagedCompletion=(p)=>`Sample of the finished work:\n\n${sampleOf(p.result)}\n\nThe full text comes after the payment is released. Its SHA-256 is on chain: ${p.resultHash}`;
 export function isPaidReady(){
  if(!existsSync('docs/registration-state.json')||!existsSync('.local/mps-runtime.env'))return false;
  const r=JSON.parse(readFileSync('docs/registration-state.json','utf8'));
  return r.status==='RegistrationConfirmed'||r.registrationState==='RegistrationConfirmed'||r.registration?.state==='RegistrationConfirmed';
 }
-export async function createPaidAdapter({save,answer,core:providedCore,mps:providedMps,registration:providedRegistration,target=taskTarget(),reviewRefund=async()=>({decision:'person',reason:'No reviewer is set up'}),refundAnswer=savedRefundAnswer}){
+export async function createPaidAdapter({save,answer,core:providedCore,mps:providedMps,registration:providedRegistration,target=taskTarget(),reviewRefund=async()=>({decision:'person',reason:'No reviewer is set up'}),refundAnswer=savedRefundAnswer,stagedDelivery=process.env.STAGED_DELIVERY==='true'}){
  const registration=()=>providedRegistration??JSON.parse(readFileSync('docs/registration-state.json','utf8'));
  let core=providedCore;
  async function getCore(){
@@ -83,7 +93,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
   const person=refundAnswer(task.id);
   if(current.refund.decision!=='refund'&&person!=='approve'){
    current=await sayToOwner(task,state,current,'personTold','We received your refund request. A person will review it.');
-   if(person==='keep')current=await sayToOwner(task,state,current,'keepTold','Our records show this work was delivered and passed its checks, so we did not agree to the refund. The payment stays in escrow until the dispute time.');
+   if(person==='keep')current=await sayToOwner(task,state,current,'keepTold',current.staged?'We did not agree to the refund. The payment stays in escrow until the dispute time, and the full text stays back unless the payment is released.':'Our records show this work was delivered and passed its checks, so we did not agree to the refund. The payment stays in escrow until the dispute time.');
    return persist(task,state,current);
   }
   if(current.observed?.NextAction?.requestedAction!=='WaitingForExternalAction')return state;
@@ -114,7 +124,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
     inputHash:taskHash(state.input),identifierFromPurchaser:nonce,RequestedFunds:[{amount:'1000000',unit:USDM}],
     payByTime:new Date(now+10*MINUTE).toISOString(),submitResultTime:new Date(now+45*MINUTE).toISOString(),unlockTime:new Date(now+61*MINUTE).toISOString(),externalDisputeUnlockTime:new Date(now+77*MINUTE).toISOString(),metadata:JSON.stringify({taskId:task.id})};
    if(!body.agentIdentifier||!Number.isInteger(body.supportedPaymentSourceIndex))throw new Error('Registration identifier and source index are required');
-   state=await persist(task,state,{stage:'terms-pending',nonce,request:body});
+   state=await persist(task,state,{stage:'terms-pending',nonce,request:body,...(stagedDelivery&&{staged:true})});
    const payment=await mps('/api/v1/payment',body);
    return persist(task,state,{...state.paid,stage:'terms-saved',payment});
   }
@@ -122,7 +132,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
    const payload=purchasePayload(p.payment,p.nonce,r);
    if(Date.now()>=Number(p.payment.payByTime))throw new Error('Signed payment deadline expired');
    state=await persist(task,state,{...p,payload,stage:'purchase-pending'});
-   const response=await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{comment:'Payment requested: 1 test USDM.',masumiPayment:payload});
+   const response=await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{comment:p.staged?'Payment requested: 1 test USDM. You get a sample first, and the full text after the payment is released.':'Payment requested: 1 test USDM.',masumiPayment:payload});
    return persist(task,state,{...p,stage:'awaiting-escrow',eventId:response.data.id});
   }
   if(['awaiting-escrow','awaiting-result','awaiting-withdrawal'].includes(p.stage)){
@@ -137,7 +147,7 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
     return produceResult(task,state,{...p,stage:'model-pending'});
    }
    if(p.stage==='awaiting-result'&&observed.resultHash===p.resultHash&&confirmedState(observed,'ResultSubmitted')&&observed.onChainState==='ResultSubmitted')return persist(task,state,{...p,stage:'complete-ready'});
-   if(p.stage==='awaiting-withdrawal'&&['Withdrawn','DisputedWithdrawn'].includes(observed.onChainState)){const evidence=await verifySettlement({core:await verifyRuntimeTask(await getCore(),task.id,target),taskId:task.id,payment:observed,sellerAddress:registration().registration?.SmartContractWallet?.walletAddress,unit:USDM});return persist(task,state,{...p,stage:evidence.verified?'settled':'awaiting-withdrawal',settlement:evidence});}
+   if(p.stage==='awaiting-withdrawal'&&['Withdrawn','DisputedWithdrawn'].includes(observed.onChainState)){const evidence=await verifySettlement({core:await verifyRuntimeTask(await getCore(),task.id,target),taskId:task.id,payment:observed,sellerAddress:registration().registration?.SmartContractWallet?.walletAddress,unit:USDM});const paidStage=p.staged?'release-ready':'settled';return persist(task,state,{...p,stage:evidence.verified?paidStage:'awaiting-withdrawal',settlement:evidence});}
    return state;
   }
   if(p.stage==='result-saved'){
@@ -148,8 +158,13 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
   }
   if(p.stage==='complete-ready'){
    state=await persist(task,state,{...p,stage:'complete-pending'});
-   const response=await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{status:'COMPLETED',comment:p.result});
+   const response=await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{status:'COMPLETED',comment:p.staged?stagedCompletion(p):p.result});
    return persist(task,{...state,phase:'completed'},{...p,stage:'awaiting-withdrawal',completionEventId:response.data.id});
+  }
+  // Sending the full text twice costs nothing, and not sending it costs a paying owner the work, so this retries.
+  if(p.stage==='release-ready'){
+   await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{comment:p.result});
+   return persist(task,state,{...p,stage:'settled'});
   }
   if(p.stage==='job-failed')return p.ownerTold||(p.tellTries??0)>=MAX_TELL_TRIES?state:tellOwner(task,state,p);
   // An answer that can resume keeps its own record of what it already did, so calling it again costs nothing twice.

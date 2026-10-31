@@ -5,7 +5,7 @@ import {parseEnv} from 'node:util';
 import {acquireWorkerLock} from './worker-lock.mjs';
 import {answer,client} from './client.mjs';
 import {reply} from './comments.mjs';
-import {createPaidAdapter,isPaidReady} from './paid-task.mjs';
+import {createPaidAdapter,fullTextHeldBack,isPaidReady} from './paid-task.mjs';
 import {taskTarget,isTaskForTarget} from './task-target.mjs';
 import {createFrontDesk} from '../orchestrator/front-desk.mjs';
 import {createLiveParts,EVIDENCE_DIR} from '../orchestrator/live-parts.mjs';
@@ -33,7 +33,7 @@ while(true){
  let state=existsSync(journal)?JSON.parse(readFileSync(journal,'utf8')):{};
  if(t.status==='READY'&&!state.phase){writeFileSync(journal,JSON.stringify({phase:'starting'}),{mode:0o600});const started=cli(['runtime','start',t.id,...target.runtimeArgs,'--coworker-id',id]);state={phase:'started',input:started.description};writeFileSync(journal,JSON.stringify(state),{mode:0o600});}
  if(state.paid&&process.env.PAID_TASKS_ENABLED!=='true')continue;
- if(state.paid||(state.phase==='started'&&process.env.PAID_TASKS_ENABLED==='true'&&isPaidReady())){state=await paid.advance(t,state);if(state.phase==='completed')await reply(t);continue;}
+ if(state.paid||(state.phase==='started'&&process.env.PAID_TASKS_ENABLED==='true'&&isPaidReady())){state=await paid.advance(t,state);if(state.phase==='completed'&&!fullTextHeldBack(state))await reply(t);continue;}
  if(state.phase==='started'){
  writeFileSync(journal,JSON.stringify({...state,phase:'model-pending'}),{mode:0o600});
  const result=await answer(state.input,`.local/${t.id}-session.json`);

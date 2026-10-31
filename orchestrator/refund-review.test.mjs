@@ -40,3 +40,11 @@ test('Jev sees counts from our records and nothing anyone wrote', async () => {
 test('the facts say whether the owner\'s job reached the chain', () => {
   assert.deepEqual(refundFacts([], {stage: 'awaiting-escrow'}).job, {fee: '1 tUSDM', result_on_chain: false, task_completed: false});
 });
+
+test('an owner holding only a sample: a person decides and Jev is not asked', async () => {
+  let asked = 0;
+  const decide = async () => { asked += 1; return {answers: {verdict: {choice: 'refund', confidence: 1}}}; };
+  const {decision} = await createRefundReviewer({readLines: () => [], decide})({taskId: 't', paid: {staged: true, stage: 'awaiting-withdrawal'}});
+  assert.equal(decision, 'person');
+  assert.equal(asked, 0);
+});

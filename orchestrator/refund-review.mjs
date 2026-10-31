@@ -35,6 +35,8 @@ export function refundFacts(lines, paid) {
 
 export function createRefundReviewer({readLines, decide = jevDecide()}) {
   return async ({taskId, paid}) => {
+    // Our records say the job was delivered, but this owner holds only a sample. Jev cannot see that difference.
+    if (paid.staged) return {decision: 'person', reason: 'The owner holds only a sample of the work'};
     try {
       const {answers = {}} = (await decide({state: refundFacts(readLines(taskId), paid), questions: QUESTIONS})) ?? {};
       const {choice: pick, confidence} = answers.verdict ?? {};

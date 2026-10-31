@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdirSync,rmSync} from 'node:fs';
-import {taskHash,purchasePayload,createPaidAdapter,confirmedState,USDM} from './paid-task.mjs';
+import {taskHash,purchasePayload,createPaidAdapter,confirmedState,USDM,sampleOf,fullTextHeldBack} from './paid-task.mjs';
 const registration={walletId:'seller-wallet',agentIdentifier:'a'.repeat(80),supportedPaymentSourceIndex:0};
 const target={coworkerId:'coworker',organizationId:null};
 const task={id:'task',coworkerId:'coworker',organizationId:null};
@@ -178,4 +178,76 @@ test('money back ends the task watching it',async()=>{
  const state=await adapter.advance(task,delivered);
  assert.equal(state.paid.stage,'refunded');assert.equal(w.reviews(),0);
  assert.equal(await adapter.advance(task,state),state);
+});
+
+const FULL_TEXT='full text of the work. '.repeat(100);
+const stagedPaid={stage:'complete-ready',staged:true,payment,result:FULL_TEXT,resultHash:taskHash(FULL_TEXT)};
+const settledPayment={onChainState:'Withdrawn',blockchainIdentifier:payment.blockchainIdentifier,CurrentTransaction:{status:'Confirmed',newOnChainState:'Withdrawn',txHash:'tx'}};
+const sellerRegistration={...registration,registration:{SmartContractWallet:{walletAddress:'addr_seller'}}};
+function settledWorld(t,{settled=true,post}={}){
+ const posts=[];
+ const world={...core,get:async(path)=>path.endsWith('/receipt')?{data:{settled,txHash:'tx',blockchainIdentifier:payment.blockchainIdentifier}}:{data:task},post:post??(async(_,body)=>{posts.push(body);return {data:{id:'event'}}})};
+ t.mock.method(globalThis,'fetch',async()=>({ok:true,json:async()=>({inputs:[],outputs:[{address:'addr_seller',amount:[{unit:USDM,quantity:'1000000'}]}]})}));
+ return {posts,made:createPaidAdapter({target,core:world,registration:sellerRegistration,save:async()=>{},answer:async()=>{throw Error('unexpected model')},mps:async()=>settledPayment})};
+}
+test('a sample is a small part of the work and never the whole of a short result',()=>{
+ assert.ok(FULL_TEXT.startsWith(sampleOf(FULL_TEXT)));
+ assert.ok(sampleOf(FULL_TEXT).length<=400);
+ assert.equal(sampleOf('short answer').length,2);
+ assert.equal(sampleOf('好'.repeat(100)),'好'.repeat(20));
+});
+test('staged delivery completes the task with a sample and the hash, not the full text',async()=>{
+ const {core,posts}=coreCounting();
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:async()=>{throw Error('unexpected model')},mps:async()=>{throw Error('unexpected payment call')}});
+ const state=await adapter.advance(task,{input:'abc',paid:stagedPaid});
+ assert.equal(posts.length,1);assert.equal(posts[0].status,'COMPLETED');
+ assert.ok(!posts[0].comment.includes(FULL_TEXT));
+ assert.ok(posts[0].comment.includes(sampleOf(FULL_TEXT)));
+ assert.ok(posts[0].comment.includes(stagedPaid.resultHash));
+ assert.equal(state.paid.stage,'awaiting-withdrawal');assert.equal(state.phase,'completed');
+});
+test('without staged delivery the full text goes out as before',async()=>{
+ const {core,posts}=coreCounting();
+ const adapter=await createPaidAdapter({target,core,registration,save:async()=>{},answer:async()=>{throw Error('unexpected model')}});
+ await adapter.advance(task,{input:'abc',paid:{...stagedPaid,staged:undefined}});
+ assert.equal(posts[0].comment,FULL_TEXT);
+});
+test('the full text goes out once, unchanged, after the seller is verifiably paid',async(t)=>{
+ const w=settledWorld(t);const adapter=await w.made;
+ let state=await adapter.advance(task,{input:'abc',phase:'completed',paid:{...stagedPaid,stage:'awaiting-withdrawal'}});
+ assert.equal(state.paid.stage,'release-ready');assert.equal(w.posts.length,0);
+ state=await adapter.advance(task,state);
+ assert.equal(state.paid.stage,'settled');assert.equal(w.posts.length,1);
+ assert.equal(w.posts[0].comment,FULL_TEXT);assert.equal(taskHash(w.posts[0].comment),stagedPaid.resultHash);
+ assert.equal(await adapter.advance(task,state),state);assert.equal(w.posts.length,1);
+});
+test('an unverified settlement keeps the full text back',async(t)=>{
+ const w=settledWorld(t,{settled:false});const adapter=await w.made;
+ const state=await adapter.advance(task,{input:'abc',phase:'completed',paid:{...stagedPaid,stage:'awaiting-withdrawal'}});
+ assert.equal(state.paid.stage,'awaiting-withdrawal');assert.equal(w.posts.length,0);
+});
+test('a failed release post stays ready to try again',async(t)=>{
+ const w=settledWorld(t,{post:async()=>{throw Error('timeout')}});const adapter=await w.made;
+ const state={input:'abc',phase:'completed',paid:{...stagedPaid,stage:'release-ready'}};
+ await assert.rejects(()=>adapter.advance(task,state),/timeout/);
+ assert.equal(state.paid.stage,'release-ready');
+});
+test('a refund request on a staged job never releases the full text',async()=>{
+ const w=refundWorld({answerOfPerson:'keep'});const adapter=await w.made;
+ await adapter.advance(task,{input:'abc',phase:'completed',paid:{...stagedPaid,stage:'awaiting-withdrawal'}});
+ assert.ok(w.posts.every(({comment})=>!comment.includes(FULL_TEXT)));
+ assert.match(w.posts[1].comment,/full text/);
+});
+test('the staged choice is told to the owner before payment and fixed for the job',async()=>{
+ const body=[];const {core,posts}=coreCounting();
+ const adapter=await createPaidAdapter({target,core,registration:{...registration,supportedPaymentSourceIndex:0},stagedDelivery:true,save:async()=>{},answer:async()=>{throw Error('unexpected model')},mps:async(_,b)=>{body.push(b);return {...payment,payByTime:String(Date.now()+60000)};}});
+ let state=await adapter.advance(task,{input:'abc'});
+ assert.equal(state.paid.staged,true);
+ state=await adapter.advance(task,state);
+ assert.match(posts[0].comment,/sample/);assert.match(posts[0].comment,/after the payment is released/);
+});
+test('comment replies wait while the full text is held back',()=>{
+ assert.equal(fullTextHeldBack({paid:{staged:true,stage:'awaiting-withdrawal'}}),true);
+ assert.equal(fullTextHeldBack({paid:{staged:true,stage:'settled'}}),false);
+ assert.equal(fullTextHeldBack({paid:{stage:'awaiting-withdrawal'}}),false);
 });
