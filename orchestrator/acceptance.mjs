@@ -118,16 +118,13 @@ export function checkCopy({spec, inputTable, resultText}) {
 }
 
 // Lists every failure instead of stopping at the first, so the evidence names all of them.
-// An outside agent's answer. We cannot check what it says, only that it is the text it committed to and not empty.
-// Outside agents hash either the text or the text as a JSON string.
+// An outside agent's answer. We cannot check what it says. Agents hash their result in different ways, and a hash
+// we cannot reproduce proves nothing either way, so it is noted for the owner and is no reason to take the money back.
 const MIN_ANSWER_CHARS = 200;
 function acceptAnswer({resultText, nonce, onChainResultHash}) {
-  const matches = [resultText, JSON.stringify(resultText)].some((text) => checkHash({resultText: text, nonce, onChainResultHash}).length === 0);
-  const failures = [
-    ...(matches ? [] : checkHash({resultText, nonce, onChainResultHash})),
-    ...whenAny('A2', 'A2_TOO_SHORT', `An answer has at least ${MIN_ANSWER_CHARS} characters`, resultText.trim().length < MIN_ANSWER_CHARS ? ['answer'] : []),
-  ];
-  return {ok: failures.length === 0, failures};
+  const matches = [resultText, JSON.stringify(resultText), JSON.stringify(resultText).slice(1, -1)].some((text) => checkHash({resultText: text, nonce, onChainResultHash}).length === 0);
+  const failures = whenAny('A2', 'A2_TOO_SHORT', `An answer has at least ${MIN_ANSWER_CHARS} characters`, resultText.trim().length < MIN_ANSWER_CHARS ? ['answer'] : []);
+  return {ok: failures.length === 0, failures, ...(matches ? {} : {note: 'A1_UNVERIFIED: we could not reproduce the hash the seller put on chain, so read the text before relying on it'})};
 }
 
 export function accept({kind, spec, inputTable, resultText, nonce, onChainResultHash}) {

@@ -18,7 +18,7 @@ import {createBlockfrost} from '../shared/blockfrost.mjs';
 import {USDM_UNIT} from '../shared/constants.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 
-// npm run third-party -- <agentIdentifier> --field <inputField> --ask <text> [--name <name>] [--task <taskId>]
+// npm run third-party -- <agentIdentifier> --field <inputField> --ask <text> [--name <name>]
 // Hires one agent we do not run, through the same planner, guard, reviewer and escrow as our own, on a
 // mandate of its own. A stranger's deadlines are long, so this mandate allows a long lock and little money.
 
@@ -30,11 +30,11 @@ const POLL_MS = 15_000;
 async function main() {
   const {positionals, values} = parseArgs({
     allowPositionals: true,
-    options: {field: {type: 'string'}, ask: {type: 'string'}, name: {type: 'string', default: 'Hired researcher'}, task: {type: 'string'}},
+    options: {field: {type: 'string'}, ask: {type: 'string'}, name: {type: 'string', default: 'Hired researcher'}},
   });
   const [agentIdentifier] = positionals;
   if (!agentIdentifier || !values.field || !values.ask) throw new Error('Usage: npm run third-party -- <agentIdentifier> --field <inputField> --ask <text>');
-  const taskId = values.task ?? `live-third-party-${Date.now()}`;
+  const taskId = `live-third-party-${Date.now()}`;
   const get = createBlockfrost({key: process.env.BLOCKFROST_API_KEY_PREPROD});
   const {onchain_metadata: metadata, quantity} = await get(`/assets/${agentIdentifier}`);
   const [holder] = await get(`/assets/${agentIdentifier}/addresses?order=desc&count=1`);
@@ -72,12 +72,7 @@ async function main() {
   const job = {kind: 'research', input: {[values.field]: values.ask}};
   const listings = (await payments.listAgents([agentIdentifier])).map((listing) => ({...listing, name: entry.name}));
 
-  const [earlier] = Object.values(ledger.state().purchases);
-  if (earlier) {
-    const outcome = await hirer.resume(earlier, {job, listings});
-    console.log(`Resumed: ${outcome.status}`);
-    process.exit(0);
-  }
+  if (Object.keys(ledger.state().purchases).length > 0) throw new Error(`Task ${taskId} already hired. To record what happened since, run the reconcile command with its token.`);
   const planner = createPlanner({generate: createGenerate()});
   const {proposals, rejected} = await planner.plan({subtask: 'research', table: [{question: values.ask}], listings, feedback: []});
   rejected.forEach(({error}) => ledger.append({step: 'plan.rejected', subtask: 'research', reason: error}));
@@ -89,7 +84,7 @@ async function main() {
   console.log(`Outcome: ${outcome.status}${outcome.code ? ` ${outcome.code}` : ''}${outcome.reason ? `: ${outcome.reason}` : ''}`);
   ledger.append(outcome.status === 'accepted' ? {step: 'run.delivered'} : {step: 'run.failed', reason: outcome.reason ?? outcome.status});
   if (outcome.status === 'accepted') console.log(outcome.result.slice(0, 1500));
-  console.log(`evidence: ${taskId}-evidence.jsonl. The seller collects after the escrow unlocks: run this again with --task ${taskId}.`);
+  console.log(`evidence: ${taskId}-evidence.jsonl. The seller collects after the escrow unlocks: OLDER_KEY=1 npm run reconcile -- ${taskId} records it.`);
   process.exit(outcome.status === 'accepted' ? 0 : 1);
 }
 

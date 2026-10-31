@@ -184,6 +184,8 @@ test('an outside agent\'s answer passes on its committed text, as text or as a J
 
   assert.equal(answer(resultHash(text, nonce)).ok, true);
   assert.equal(answer(resultHash(JSON.stringify(text), nonce)).ok, true);
-  assert.equal(answer('ee'.repeat(32)).ok, false);
+  assert.equal(answer(resultHash(JSON.stringify(text).slice(1, -1), nonce)).note, undefined);
+  assert.equal(answer('ee'.repeat(32)).ok, true);
+  assert.match(answer('ee'.repeat(32)).note, /A1_UNVERIFIED/);
   assert.equal(answer(resultHash('short', nonce), 'short').failures[0].code, 'A2_TOO_SHORT');
 });

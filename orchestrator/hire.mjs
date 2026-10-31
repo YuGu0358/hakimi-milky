@@ -156,7 +156,7 @@ export function createHirer({
       onChainResultHash: view.resultHash,
     });
     if (verdict.ok) {
-      recordOnce(ctx, 'acceptance.passed');
+      recordOnce(ctx, 'acceptance.passed', verdict.note ? {reason: verdict.note} : {});
       return {status: 'accepted', subtask: ctx.subtask, result, watch: watchSettlement(ctx)};
     }
     const reason = summarize(verdict.failures);

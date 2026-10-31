@@ -5,7 +5,8 @@ import {NETWORK, USDM_UNIT} from '../shared/constants.mjs';
 
 // npm run registry:connect-older
 // Connects the older escrow contract to our local Payment Service, using the values the service seeds for
-// it, with the same two wallets. It also makes a separate key that can spend very little from it.
+// it, with two new wallets. It also makes a separate key that can spend very little from it. Fund the new
+// buyer wallet, whose address it prints, with some test ADA and tUSDM.
 // Nothing leaves this machine except the service's own reads of the chain. It never prints a mnemonic.
 
 const OLDER = Object.freeze({
@@ -39,15 +40,9 @@ async function main() {
 
   const {PaymentSources: sources} = await call('/payment-source?take=100');
   const onNetwork = sources.filter(({network}) => network === NETWORK);
-  const current = onNetwork.find(({paymentSourceType}) => paymentSourceType === 'Web3CardanoV2');
-  if (!current) throw new Error('The current contract is not connected');
 
-  const mnemonicOf = async (walletType) => {
-    const {Wallets: wallets} = await call(`/wallet/list?walletType=${walletType}&paymentSourceId=${encodeURIComponent(current.id)}`);
-    if (wallets.length !== 1) throw new Error(`Expected one ${walletType} wallet, found ${wallets.length}`);
-    const {Secret: secret} = await call(`/wallet?walletType=${walletType}&id=${encodeURIComponent(wallets[0].id)}&includeSecret=true`);
-    return secret.mnemonic;
-  };
+  // A wallet can belong to one payment source only, so this contract gets a new pair.
+  const newMnemonic = async () => (await post('/wallet', {network: NETWORK})).walletMnemonic;
 
   let older = onNetwork.find(({smartContractAddress}) => smartContractAddress === OLDER.contract);
   if (!older) {
@@ -59,8 +54,8 @@ async function main() {
       cooldownTime: OLDER.cooldownTime,
       AdminWallets: OLDER.adminWallets.map((walletAddress) => ({walletAddress})),
       FeeReceiverNetworkWallet: {walletAddress: OLDER.feeWallet},
-      PurchasingWallets: [{walletMnemonic: await mnemonicOf('Purchasing'), collectionAddress: null, note: 'older contract, same buyer wallet'}],
-      SellingWallets: [{walletMnemonic: await mnemonicOf('Selling'), collectionAddress: null, note: 'older contract, same seller wallet'}],
+      PurchasingWallets: [{walletMnemonic: await newMnemonic(), collectionAddress: null, note: 'older contract buyer'}],
+      SellingWallets: [{walletMnemonic: await newMnemonic(), collectionAddress: null, note: 'older contract seller'}],
     });
     if (older.smartContractAddress !== OLDER.contract) {
       throw new Error(`The service derived ${older.smartContractAddress}, not the older contract. Remove that source.`);
@@ -84,6 +79,7 @@ async function main() {
   });
   mkdirSync(dirname(OLDER_TOKEN_PATH), {recursive: true, mode: 0o700});
   writeFileSync(OLDER_TOKEN_PATH, `MPS_RUNTIME_TOKEN=${key.token}\n`, {mode: 0o600});
+  console.log(`Fund this buyer wallet: ${buyers[0].walletAddress}`);
   console.log(`A key with ${KEY_CREDIT} units of credit is saved in ${OLDER_TOKEN_PATH}`);
 }
 

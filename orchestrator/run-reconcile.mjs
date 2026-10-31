@@ -4,11 +4,12 @@ import {fileURLToPath} from 'node:url';
 import {createLedger} from './ledger.mjs';
 import {reconcileRun} from './reconcile.mjs';
 import {requireSavedRuntimeToken} from '../frontdesk/registration-config.mjs';
-import {BUYER_TOKEN_PATH} from '../payments/buyer-key.mjs';
+import {BUYER_TOKEN_PATH, OLDER_TOKEN_PATH} from '../payments/buyer-key.mjs';
 import {createPayments} from '../payments/payments.mjs';
 
 // npm run reconcile                 catch up every live run's evidence with the chain
 // npm run reconcile -- <taskId>...  only these runs
+// OLDER_KEY=1 npm run reconcile -- <taskId>  a run paid through the older contract
 // It reads the chain and adds evidence lines. It buys nothing.
 
 const DIRECTORY = fileURLToPath(new URL('../.local/', import.meta.url));
@@ -22,7 +23,7 @@ const allTaskIds = () =>
 async function main(givenTaskIds) {
   const payments = createPayments({
     mpsUrl: process.env.MPS_URL,
-    token: requireSavedRuntimeToken(BUYER_TOKEN_PATH),
+    token: requireSavedRuntimeToken(process.env.OLDER_KEY ? OLDER_TOKEN_PATH : BUYER_TOKEN_PATH),
   });
   const taskIds = givenTaskIds.length > 0 ? givenTaskIds : allTaskIds();
   let failed = 0;
