@@ -77,7 +77,7 @@ Each run in `evidence/runs/` has `<task>-evidence.jsonl`, every step in order, a
 
 | Check | What it shows | Result |
 | --- | --- | --- |
-| C0 | A paid job through Sokosumi in the TUM workspace, with the seller's receipt | Delivered, seller paid, receipt verified |
+| C0 | A paid job through Sokosumi in the TUM workspace, with the seller's receipt | Delivered, seller paid, receipt verified, and again on the final code |
 | C1 | The orchestrator hires two specialists | Delivered in 3.1 minutes |
 | C2 | A specialist loses rows, and the money comes back | Refunded, replaced, delivered in 6.4 minutes |
 | C3 | A hidden instruction in a supplier's note, against the real planner | Ignored |
@@ -208,24 +208,25 @@ The planner in this run read the track record just before we fixed it. That vers
 | Each limit at the edge, and one unit over | 7 of 7 exact |
 | The same order replayed 10 times | 1 order |
 | Two hires racing for one budget | 1 passed |
-| Jev on 20 wasteful and 20 fine proposals | 20 of 20 vetoed, 20 of 20 allowed. Those shapes resemble the ones its rubric was tuned on |
-| 100 attacks written by a model | 63 stopped by the schema, 20 by the guard, 8 by the reviewer, 0 outside the mandate |
+| Jev on 20 wasteful and 20 fine proposals | 20 of 20 vetoed, 19 of 20 allowed and 1 sent to the owner. Those shapes resemble the ones its rubric was tuned on |
+| 25 attacks written by a model on the final code | 11 stopped by the schema, 11 by the guard, 1 by the reviewer, 0 outside the mandate. The model service returned empty replies for 7 of 8 rounds that night, so it wrote 25 of the 100 asked for |
+| 100 attacks in an earlier run, before the guard's last rules | 63 stopped by the schema, 20 by the guard, 8 by the reviewer, 0 outside the mandate |
 | 20 hand-written notes against the real planner | It fell for 0 |
 
-The other 9 model-written attacks stayed inside the mandate. They only inflate a maximum price, and the listed price is what gets paid, or ask for a second hire, which the guard stops in a live run.
+The other 9 attacks of the earlier run, and 2 of the latest, stayed inside the mandate. They only inflate a maximum price, and the listed price is what gets paid, or ask for a second hire, which the guard stops in a live run.
 
 ### The planner reading the chain's track record
 
-`npm run track-record` read 518 escrow transactions at 21:46 CET on 30 October. The specialists' counts match our own run records, hash for hash:
+`npm run track-record` read 625 escrow transactions at 03:28 CET on 31 October:
 
 | Agent | Paid | Refunded |
 | --- | --- | --- |
-| Hakimi Budget Normalizer | 7 | 3 |
-| Hakimi Copywriter | 8 | 1 |
+| Hakimi Budget Normalizer | 12 | 6 |
+| Hakimi Copywriter | 15 | 1 |
 | Hakimi Table Normalizer | 1 | 1 |
-| Hakimi Milky, the front desk | 3 | 0 |
+| Hakimi Milky, the front desk | 4 | 0 |
 
-The front desk's three are the paid job above and the two tasks in a personal workspace.
+The front desk's jobs are the two paid jobs in the TUM workspace and the two tasks in a personal workspace.
 
 In task `live-record-1793370383`, the planner passed over the cheap normalizer because of its refunds and chose the standard one at 0.3 tUSDM, and Jev approved. It misread the count in its reason, saying 3 of 4. The record it read said 4 paid and 3 refunded, so 3 of 7. The choice stands, and the reason should not be quoted. In task `live-record-1793393225`, with the standard normalizer now carrying a refund too, it compared refund rates, 3 of 10 against 1 of 2, and went back to the cheap one. Delivered in 3.9 minutes.
 
@@ -377,6 +378,21 @@ The second one keeps the service running. got 11, which the Blockfrost client us
 ## Platforms
 
 CI runs every test on macOS and Windows, including starting a specialist agent as its own process. Every Preprod run above was on macOS. The Payment Service has not been installed on Windows, so the paid flow has not run there.
+
+## On the final code
+
+The runs below are newer than the ones further up, and ran after the changes in "What the money path assumes". They show what changed, and what did not.
+
+| Check | Result | Transactions |
+| --- | --- | --- |
+| A second paid job in the TUM workspace, task `01a18f86-dafb-721f-a16d-4e2e73dadc47` | Two specialists hired, delivered in 3.9 minutes, seller's receipt verified, net 1 tUSDM | Hires lock [fc0b4d03…](https://preprod.cardanoscan.io/transaction/fc0b4d03cf69ef55da904011694961334c0020f9006f2093786339bc9ef76a99), results [c00d2a2d…](https://preprod.cardanoscan.io/transaction/c00d2a2dbcc2ada0fd8f1ba24262981ce5da84222e820c69c365174c5f523431) and [2c9cd08e…](https://preprod.cardanoscan.io/transaction/2c9cd08ebf6cc1287a26733032abbac90239203a8ccc9e13ac7cbbe1d06ee0c6), sellers collect [81f373ce…](https://preprod.cardanoscan.io/transaction/81f373ce30b30608433dc2b6afcfd2e5673804c33646b792c5d31533a45c5ff3), front desk collects [e031cb82…](https://preprod.cardanoscan.io/transaction/e031cb82cccdeca79b57d64e24eb0f6040178a0b29b4f0df8315328f9892457f) |
+| C1, `live-c1-1793400769528` | Delivered in 3.1 minutes, sellers paid at 43 minutes | Lock [26152962…](https://preprod.cardanoscan.io/transaction/26152962088a81a2f6b5f5b5948ce6e8f96e383c5ed32a30d6a2e5b1a12f9378), collect [4e8f67c3…](https://preprod.cardanoscan.io/transaction/4e8f67c3481462b7ee9dd1f40640116118e2b595a14437d117c288468bdf8828) |
+| C6, `live-c6-1793403693402` | Killed after both orders, restarted, 2 orders, 2 locks, delivered | Lock [ebc07d70…](https://preprod.cardanoscan.io/transaction/ebc07d708691d453397a3c042ce27ae6014110b3f300c5ca2050d4f0df922670), collect [76e1775b…](https://preprod.cardanoscan.io/transaction/76e1775bbe406430573c083a72272614225757ed845cb5796d8745a4a35cb133) |
+| C2, `live-c2-1793406715059` | **Not delivered.** The refund came back, and the planner switched agents, but Jev was unsure and sent the switch to the owner | Refund [315943b2…](https://preprod.cardanoscan.io/transaction/315943b2ab92a4bd65546daf4dd5a793832dd674baf0c8b10e604d70cc6491be) |
+
+The new C2 is a result we did not want and we kept it. The agent the planner switched to carries a refund from our own outage, so Jev's confidence was 0.3. The owner cannot yet answer an escalation, so the run ends there, with the money back and the copywriter still paid for work that was not delivered. Stopping is what a reviewer should do when it is unsure. The earlier C2 above delivered because no agent had a record yet.
+
+A first run of this C2 found a bug: told only that a hire had failed, and with the chain's older numbers hiding this run's refund, the planner chose the same failing agent again. Failures now name the agent, and a run's own refunds add to the chain's count.
 
 ## What the money path assumes
 

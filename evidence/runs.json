@@ -20,6 +20,18 @@
     ]
   },
   {
+    "taskId": "01a18f86-dafb-721f-a16d-4e2e73dadc47",
+    "title": "A second paid job, on the final code",
+    "story": "The same paid path after the last code changes. The front desk's own seller's receipt is verified, with a net of 1 tUSDM.",
+    "sokosumiTask": "01a18f86-dafb-721f-a16d-4e2e73dadc47, Coworker 01a189e8-8258-707e-97c5-c06718385eb7",
+    "transactions": [
+      {
+        "label": "Front desk collects",
+        "txHash": "e031cb82cccdeca79b57d64e24eb0f6040178a0b29b4f0df8315328f9892457f"
+      }
+    ]
+  },
+  {
     "taskId": "live-c1-1793361114616",
     "title": "C1: the orchestrator hiring two specialists",
     "story": "The planner chooses the cheap normalizer and the copywriter. Both results pass acceptance, and the sellers collect once the escrow unlocks.",
@@ -64,6 +76,18 @@
     "taskId": "live-record-1793393225",
     "title": "The planner reading the fixed track record",
     "story": "With the standard normalizer now carrying a refund too, the planner compares refund rates and goes back to the cheap one.",
+    "transactions": []
+  },
+  {
+    "taskId": "live-c2-1793406715059",
+    "title": "C2 on the final code: not delivered",
+    "story": "The agent loses two rows again, the refund comes back and the planner switches agents, naming the one that failed. The other normalizer carries a refund from our own outage, so Jev is unsure and sends the switch to the owner, who cannot yet answer. The run stops with the money back and the copywriter paid.",
+    "transactions": []
+  },
+  {
+    "taskId": "live-c6-1793403693402",
+    "title": "C6 on the final code",
+    "story": "Killed as soon as both orders went out, then restarted with the same task. Two orders, two locks, delivered.",
     "transactions": []
   }
 ]

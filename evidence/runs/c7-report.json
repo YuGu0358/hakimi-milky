@@ -6,34 +6,38 @@
     "escaped": [],
     "wrongCode": [],
     "byRule": {
-      "G2": 250,
-      "G1": 188,
-      "G5": 188,
-      "G4": 180,
-      "G3": 110,
-      "G6": 84
+      "G1": 252,
+      "G5": 176,
+      "G6": 60,
+      "G3": 99,
+      "G2": 209,
+      "G4": 204
     },
     "byCode": {
-      "G2_OVER_PER_HIRE": 86,
-      "G1_URL_MISMATCH": 45,
-      "G2_OVER_BUDGET": 47,
-      "G1_NOT_ALLOWLISTED": 71,
-      "G5_OPEN_PURCHASE": 72,
-      "G5_ALREADY_ACCEPTED": 39,
-      "G1_WRONG_ROLE": 35,
-      "G4_PAYBY_PASSED": 40,
-      "G4_LATE_DELIVERY": 51,
-      "G5_NONCE_CHANGED": 43,
-      "G4_LOCKED_TOO_LONG": 51,
-      "G3_INPUT_HASH_MISMATCH": 69,
-      "G4_BAD_TIME": 38,
-      "G2_OVER_PROPOSAL_MAX": 41,
-      "G1_VKEY_MISMATCH": 37,
-      "G6_MAX_HIRES": 84,
-      "G2_BAD_AMOUNT": 41,
-      "G5_ALREADY_SETTLED": 34,
-      "G2_UNIT_NOT_ALLOWED": 35,
-      "G3_NONCE_MISMATCH": 41
+      "G1_VKEY_MISMATCH": 40,
+      "G5_NONCE_CHANGED": 41,
+      "G5_OPEN_PURCHASE": 69,
+      "G6_MAX_HIRES": 60,
+      "G3_NONCE_MISMATCH": 46,
+      "G1_QUOTE_AGENT_MISMATCH": 39,
+      "G2_UNIT_NOT_ALLOWED": 34,
+      "G4_DISPUTE_TOO_LATE": 39,
+      "G4_LOCKED_TOO_LONG": 33,
+      "G1_NOT_ALLOWLISTED": 70,
+      "G1_WRONG_ROLE": 32,
+      "G5_ALREADY_SETTLED": 30,
+      "G2_OVER_PER_HIRE": 63,
+      "G4_NO_REFUND_WINDOW": 27,
+      "G2_OVER_BUDGET": 42,
+      "G5_ALREADY_ACCEPTED": 36,
+      "G1_WRONG_PAYMENT_SOURCE": 38,
+      "G2_BAD_AMOUNT": 37,
+      "G4_LATE_DELIVERY": 41,
+      "G2_OVER_PROPOSAL_MAX": 33,
+      "G3_INPUT_HASH_MISMATCH": 53,
+      "G4_BAD_TIME": 34,
+      "G4_PAYBY_PASSED": 30,
+      "G1_URL_MISMATCH": 33
     }
   },
   "legal": {
@@ -101,9 +105,9 @@
     },
     "fine": {
       "total": 20,
-      "allow": 20,
+      "allow": 19,
       "veto": 0,
-      "escalate": 0
+      "escalate": 1
     }
   }
 }
