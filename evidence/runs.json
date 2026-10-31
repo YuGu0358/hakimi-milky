@@ -79,15 +79,33 @@
     "transactions": []
   },
   {
-    "taskId": "live-c2-1793406715059",
-    "title": "C2 on the final code: not delivered",
-    "story": "The agent loses two rows again, the refund comes back and the planner switches agents, naming the one that failed. The other normalizer carries a refund from our own outage, so Jev is unsure and sends the switch to the owner, who cannot yet answer. The run stops with the money back and the copywriter paid.",
-    "transactions": []
-  },
-  {
     "taskId": "live-c6-1793403693402",
     "title": "C6 on the final code",
     "story": "Killed as soon as both orders went out, then restarted with the same task. Two orders, two locks, delivered.",
+    "transactions": []
+  },
+  {
+    "taskId": "live-c2-1793434498000",
+    "title": "C2 on the final code: the owner answers",
+    "story": "The agent loses two rows and the refund comes back. The planner switches agents, naming the one that failed, and Jev sends the switch to the owner. We answered as the owner with npm run owner and started the task again. Jev read the hire again and allowed it itself, the new agent delivered, and the run finished. The first hire of this run is the refund on the page, and the owner's answer was not what let the second through.",
+    "transactions": []
+  },
+  {
+    "taskId": "live-c2-1793406715059",
+    "title": "C2 before the owner could answer",
+    "story": "The same fault, before npm run owner existed. Jev was unsure about the switch and the owner had no way to answer, so the run stopped with the money back and the copywriter paid.",
+    "transactions": []
+  },
+  {
+    "taskId": "live-third-party-1793433562338",
+    "title": "Hiring an agent we do not run",
+    "story": "Kodosumi's Expose: Advanced Web Research, from the older registry, paid through the older contract on a small mandate. The same planner, guard and Jev. We could not reproduce the hash it put on chain, so the check passes with a note for the owner. The seller can collect after about 18:52 CET on 31 October.",
+    "transactions": []
+  },
+  {
+    "taskId": "live-third-party-1793433143918",
+    "title": "The first hire of that agent",
+    "story": "Our check called the same hash a mismatch and would have asked for a refund, but the process ended first and no refund went out. The answer was on topic, so we corrected the check, and the last line says so.",
     "transactions": []
   }
 ]

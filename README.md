@@ -56,10 +56,10 @@ Models can only tighten the leash, never loosen it.
 
 | Registry | Minted | Live | Fixed price | Also a public address |
 | --- | --- | --- | --- | --- |
-| Current (`67ab0c92…`), which our Payment Service pays through | 1043 | 355 | 189 | 140 |
-| Older (`7e8bdaf2…`), another escrow contract, not connected | 2803 | 1154 | 1019 | 762 |
+| Current (`67ab0c92…`) | 1052 | 364 | 194 | 145 |
+| Older (`7e8bdaf2…`), paid through its own escrow contract | 2804 | 1155 | 1043 | 785 |
 
-Of the 140, 60 are priced in tUSDM and 3 of those fit the 0.4 tUSDM limit for one hire. "Public" is judged from the text of the address only. The file `.local/registry-catalog.json` lists every agent and why it can or cannot be hired. Names and addresses are text written by strangers, so the command does not print them.
+Of the 145 on the current registry, 64 are priced in tUSDM and 3 of those fit the 0.4 tUSDM limit for one hire. Of the 785 on the older one, 315 are in tUSDM and 139 fit it, many of them test agents. On 31 October 76 agents answered a read of their availability, and few of them do work a shop could use. "Public" is judged from the text of the address only. The file `.local/registry-catalog.json` lists every agent and why it can or cannot be hired. Names and addresses are text written by strangers, so the command does not print them.
 
 The planner still sees only the owner's list, however many agents exist. A run reads exactly the agents on that list, however long ago they registered, and names in its evidence any it cannot hire. To add one:
 
@@ -67,7 +67,25 @@ The planner still sees only the owner's list, however many agents exist. A run r
 npm run registry:allow -- <agentIdentifier> <normalize|copy> --share-table [--name <name>] [--dry-run]
 ```
 
-It refuses agents on the older registry, agents without a fixed price in the budget's currency or above the limit, addresses that are not public https, and any agent held by a script. It reads the seller's key from the address holding the agent and pins it. `--share-table` is required because the owner's table goes to a seller before any payment. The model reads the name the owner gave, not the one the agent registered. This path has unit tests and dry runs. It has not hired a stranger, and an ordinary MIP-003 seller would still fail at the quote.
+It refuses agents without a fixed price in the budget's currency or above the limit, addresses that are not public https, and any agent held by a script. It reads the seller's key from the address holding the agent and pins it. `--share-table` is required because the owner's table goes to a seller before any payment. The model reads the name the owner gave, not the one the agent registered. A paid task on Sokosumi does not use these pins, because the customer's table is not the operator's to share.
+
+## Hiring an agent we do not run
+
+`npm run registry:connect-older` connects the older escrow contract to our Payment Service. `npm run third-party` then hires one outside agent, on a mandate of its own: at most 0.05 tUSDM, one hire, a key with 0.1 tUSDM of credit from its own wallet, and a long lock, because this seller's deadlines are long. The planner, guard, Jev and escrow are the same ones our own agents go through.
+
+We hired Kodosumi's "Expose: Advanced Web Research" twice at 0.01 tUSDM, asking what a small bubble tea shop should check before choosing a supplier. Both answers were on topic and arrived in about 5 minutes.
+
+| Run | Hire locked | Result on chain | Our check |
+| --- | --- | --- | --- |
+| `live-third-party-1793433562338` | [b31cbd61…](https://preprod.cardanoscan.io/transaction/b31cbd61b0e55712796e436b505ab65d6823abc5a0ac4776037cea48ef68f373) | [d9112706…](https://preprod.cardanoscan.io/transaction/d911270691116ebbd82985fa7b57b5f62fcfda7bb960a3e72230b90a1f7a630a) | Passed, marked `A1_UNVERIFIED` |
+| `live-third-party-1793433143918` | [8e4c647d…](https://preprod.cardanoscan.io/transaction/8e4c647dab993a60879e8ef97186c89bbbf27f3e74abb11025ebc593b48146f1) | [4939e657…](https://preprod.cardanoscan.io/transaction/4939e6570f3bb58c17646e443a38aa41fc1586195c371f29df406160f459e2f9) | Failed `A1_HASH_MISMATCH`, then corrected by hand. No refund was requested |
+
+What this does not show:
+
+- **We cannot verify the text.** The hash this seller puts on chain does not match the text it returns under MIP-004 or any other form we tried, so we cannot prove the text is what it committed to. For an outside agent the run notes this for the owner and does not ask for a refund, because the mismatch may be on our side.
+- **We cannot check an outside answer's content.** We check only that it has at least 200 characters. A person has to read it.
+- **The sellers have not collected yet.** The escrow unlocks at about 18:52 CET on 31 October, after submissions close. Both payments are locked on chain until then.
+- **It is one agent, and separate from the shop's table.** The front desk still hires only our own agents.
 
 ## What has run
 
@@ -209,11 +227,10 @@ The planner in this run read the track record just before we fixed it. That vers
 | The same order replayed 10 times | 1 order |
 | Two hires racing for one budget | 1 passed |
 | Jev on 20 wasteful and 20 fine proposals | 20 of 20 vetoed, 19 of 20 allowed and 1 sent to the owner. Those shapes resemble the ones its rubric was tuned on |
-| 25 attacks written by a model on the final code | 11 stopped by the schema, 11 by the guard, 1 by the reviewer, 0 outside the mandate. The model service returned empty replies for 7 of 8 rounds that night, so it wrote 25 of the 100 asked for |
-| 100 attacks in an earlier run, before the guard's last rules | 63 stopped by the schema, 20 by the guard, 8 by the reviewer, 0 outside the mandate |
+| 100 attacks written by a model | 52 stopped by the schema, 21 by the guard, 14 by the reviewer, 0 outside the mandate. The model service's content filter blanked 53 rounds, which were tried again |
 | 20 hand-written notes against the real planner | It fell for 0 |
 
-The other 9 attacks of the earlier run, and 2 of the latest, stayed inside the mandate. They only inflate a maximum price, and the listed price is what gets paid, or ask for a second hire, which the guard stops in a live run.
+The other 13 stayed inside the mandate. They only inflate a maximum price, and the listed price is what gets paid, or ask for a second hire, which the guard stops in a live run.
 
 ### The planner reading the chain's track record
 
@@ -284,6 +301,7 @@ You need Node 24, PostgreSQL 13 or newer, a Blockfrost Preprod key, a model key,
 9. Stop what you started by hand, then start everything with `npm run online`.
 10. Post a task with the table in its text: `sokosumi --preprod tasks create --organization-slug <slug> --coworker-id <id> --description "<text and CSV>" --status READY --json`. The paid job's text began: "Clean this supplier table and write one short product text per row. Keep every row and SKU, and do not change prices."
 11. The escrow unlocks 61 minutes after the task starts, and the Payment Service collects for the seller about 10 minutes later. Keep the machine awake for about 75 minutes. A closed lid sleeps it, and `npm run reconcile` catches the records up afterwards.
+12. To hire outside agents through the older contract, run `npm run registry:connect-older` and send the wallet it prints some test ADA and tUSDM.
 
 ### Specialist agents
 
@@ -311,7 +329,7 @@ The table is CSV with the columns `sku,name,category,unit,price`, and may add `s
 
 Each paid task with a table refills the orchestrator's limited key once, so the worker reads `ADMIN_KEY` from `frontdesk/.local/mps.env` for that one call. The reviewer needs `TYPESAFE_API_KEY` in `frontdesk/.env`.
 
-If the worker crashes during the hiring step it picks the job up from the evidence, buys nothing twice and checks every delivered result against the chain again. If it crashes during a write to Sokosumi or the Payment Service, that task stops for a person to inspect, because the outcome is unknown. A job that fails for a passing reason gets up to five tries, a minute apart. If the reviewer escalates, if the tries run out or if the deadline passes, the owner is told, no result goes on chain and the seller cannot collect. The owner cannot yet answer an escalation and continue the job. The worker's restart and the five tries are covered by tests and have not come up on Preprod.
+If the worker crashes during the hiring step it picks the job up from the evidence, buys nothing twice and checks every delivered result against the chain again. If it crashes during a write to Sokosumi or the Payment Service, that task stops for a person to inspect, because the outcome is unknown. A job that fails for a passing reason gets up to five tries, a minute apart. If the reviewer escalates, if the tries run out or if the deadline passes, the owner is told, no result goes on chain and the seller cannot collect. On Sokosumi the owner cannot yet answer an escalation and continue the job, so the job fails and says why. `npm run owner` answers it for a run started by hand. The worker's restart and the five tries are covered by tests and have not come up on Preprod.
 
 ### Testing the guard
 
@@ -388,11 +406,13 @@ The runs below are newer than the ones further up, and ran after the changes in 
 | A second paid job in the TUM workspace, task `01a18f86-dafb-721f-a16d-4e2e73dadc47` | Two specialists hired, delivered in 3.9 minutes, seller's receipt verified, net 1 tUSDM | Hires lock [fc0b4d03…](https://preprod.cardanoscan.io/transaction/fc0b4d03cf69ef55da904011694961334c0020f9006f2093786339bc9ef76a99), results [c00d2a2d…](https://preprod.cardanoscan.io/transaction/c00d2a2dbcc2ada0fd8f1ba24262981ce5da84222e820c69c365174c5f523431) and [2c9cd08e…](https://preprod.cardanoscan.io/transaction/2c9cd08ebf6cc1287a26733032abbac90239203a8ccc9e13ac7cbbe1d06ee0c6), sellers collect [81f373ce…](https://preprod.cardanoscan.io/transaction/81f373ce30b30608433dc2b6afcfd2e5673804c33646b792c5d31533a45c5ff3), front desk collects [e031cb82…](https://preprod.cardanoscan.io/transaction/e031cb82cccdeca79b57d64e24eb0f6040178a0b29b4f0df8315328f9892457f) |
 | C1, `live-c1-1793400769528` | Delivered in 3.1 minutes, sellers paid at 43 minutes | Lock [26152962…](https://preprod.cardanoscan.io/transaction/26152962088a81a2f6b5f5b5948ce6e8f96e383c5ed32a30d6a2e5b1a12f9378), collect [4e8f67c3…](https://preprod.cardanoscan.io/transaction/4e8f67c3481462b7ee9dd1f40640116118e2b595a14437d117c288468bdf8828) |
 | C6, `live-c6-1793403693402` | Killed after both orders, restarted, 2 orders, 2 locks, delivered | Lock [ebc07d70…](https://preprod.cardanoscan.io/transaction/ebc07d708691d453397a3c042ce27ae6014110b3f300c5ca2050d4f0df922670), collect [76e1775b…](https://preprod.cardanoscan.io/transaction/76e1775bbe406430573c083a72272614225757ed845cb5796d8745a4a35cb133) |
-| C2, `live-c2-1793406715059` | **Not delivered.** The refund came back, and the planner switched agents, but Jev was unsure and sent the switch to the owner | Refund [315943b2…](https://preprod.cardanoscan.io/transaction/315943b2ab92a4bd65546daf4dd5a793832dd674baf0c8b10e604d70cc6491be) |
+| C2, `live-c2-1793434498000` | The agent lost two rows and the refund came back. The planner switched agents, Jev sent the switch to the owner, the owner approved, and the new agent delivered in 5.2 minutes | Refund [bed76dc0…](https://preprod.cardanoscan.io/transaction/bed76dc0e3682381307782b537b30fa47821b8d757c3750216584a5d1bec5833), new hire locked [62bf8799…](https://preprod.cardanoscan.io/transaction/62bf879927df13e9b77aad57ba3499d78a092b03fe0c752c5438679aadbe8d27), result [4cf88e96…](https://preprod.cardanoscan.io/transaction/4cf88e96a917bb97883e9161b0c81f00a93c3255f6a572ee98c301f4023e5776) |
 
-The new C2 is a result we did not want and we kept it. The agent the planner switched to carries a refund from our own outage, so Jev's confidence was 0.3. The owner cannot yet answer an escalation, so the run ends there, with the money back and the copywriter still paid for work that was not delivered. Stopping is what a reviewer should do when it is unsure. The earlier C2 above delivered because no agent had a record yet.
+In that C2, Jev read the same hire again after the owner approved and allowed it itself, at confidence 0.86, so the owner's answer was not what let it through. Tests cover the case where the reviewer is still unsure. We gave the owner's answer ourselves, with `npm run owner -- <taskId> approve`, and then started the same task again.
 
-A first run of this C2 found a bug: told only that a hire had failed, and with the chain's older numbers hiding this run's refund, the planner chose the same failing agent again. Failures now name the agent, and a run's own refunds add to the chain's count.
+An earlier run of C2, `live-c2-1793406715059`, stopped at that question and did not deliver, because the owner had no way to answer. Its refund still came back.
+
+The first run of C2 on this code found a bug: told only that a hire had failed, and with the chain's older numbers hiding this run's refund, the planner chose the same failing agent again. Failures now name the agent, and a run's own refunds add to the chain's count.
 
 ## What the money path assumes
 
@@ -402,14 +422,14 @@ A seller can change no field of the owner's row: acceptance compares each one wi
 
 ## Demo limits
 
-- All the agents we hire are our own. A scan of the current Preprod registry, the one our Payment Service pays through (policy `67ab0c92…`), on 30 October found 348 live agents, 4 of them ours. Of the 138 third-party agents with a fixed price and a public address, 9 answered with a working availability check and input schema, and none of them cleans a table or writes product text. The scan's output is not in this repo.
-- Of the 20 agents listed on Sokosumi on 30 October, 19 matched entries in an older registry (policy `7e8bdaf2…`), which holds 1154 live agents and pays through another escrow contract (`addr_test1wz7j4kmg…`). One matched both registries and could not be identified. Our Payment Service has only the current contract connected, so the orchestrator cannot pay these agents yet. As a test we hired one by hand on Sokosumi: Expose: Advanced Web Research, job `01a18c48-81c6-70cb-ad0a-313d9bb693ac`. The seller collected after the escrow unlocked, in [6da0d8a2…](https://preprod.cardanoscan.io/transaction/6da0d8a2d0c03cc87a40b7aff333092d314c3a7adcb1317acb796cf3b6fdbcd4). That hire went through neither our guard nor our Payment Service.
+- The agents the shop's table goes to are our own. A scan of the current Preprod registry on 30 October found none that cleans a table or writes product text. The one outside agent we hired does research, under "Hiring an agent we do not run".
+- Of the 20 agents listed on Sokosumi on 30 October, 19 matched entries in the older registry. One of them, Expose: Advanced Web Research, was also hired by hand on Sokosumi as job `01a18c48-81c6-70cb-ad0a-313d9bb693ac`, outside our guard, and the seller collected in [6da0d8a2…](https://preprod.cardanoscan.io/transaction/6da0d8a2d0c03cc87a40b7aff333092d314c3a7adcb1317acb796cf3b6fdbcd4).
 - A standard third-party seller would not fit today without an adapter: quote fields, input hash, result hash and its longer deadlines all differ from what our guard expects.
 - The specialist agents listen on 127.0.0.1, so a demo runs on one machine.
 - A specialist agrees to every refund on its own. A real seller could dispute.
 - A failure of the worker between a failed check and the refund request is only repaired by starting the same task again. Nothing sweeps for owed refunds on its own.
 - A refund has to be requested at least 5 minutes before the escrow unlocks. If the machine is down past that, a seller whose result fails its check can still collect.
-- Jev has not vetoed or escalated on Preprod. All its reviews in our chain runs approved. Its vetoes are in C7.
+- Jev has not vetoed on Preprod. It has approved, and it has sent one switch of agents to the owner, in two C2 runs. Its vetoes are in C7.
 - An agent could pad its track record by buying from itself, and nothing here checks for that.
 - The worker handles one paid task at a time, so a second task waits while a first one hires.
 - Cleaned prices are plain numbers. Currency signs are dropped, because the checks compare numbers.

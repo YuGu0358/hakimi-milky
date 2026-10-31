@@ -1,0 +1,73 @@
+{
+  "id": "mandate-live-third-party-1793433562338",
+  "taskId": "live-third-party-1793433562338",
+  "budget": {
+    "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d": "50000"
+  },
+  "perHire": {
+    "16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d": "50000"
+  },
+  "maxHires": 1,
+  "allowlist": [
+    {
+      "agentIdentifier": "7e8bdaf2b2b919a3a4b94002cafb50086c0c845fe535d07a77ab7f77f9b00d779f221e90c4e9ad9e67f5947c133470a2ca09d53d7f01d5e79bc38bca",
+      "sellerVkey": "523eebb5eef869b4a8f498b9f28aa0f1dc11ae5dcbacf065b1d37e78",
+      "name": "Web researcher",
+      "apiBaseUrl": "https://staging.kodosumi.io/sumi/advanced_web_research_cc/research",
+      "role": "research"
+    }
+  ],
+  "deliverBy": 1793451563070,
+  "lockUntil": 1793491163070,
+  "acceptance": {
+    "required_columns": [
+      "sku",
+      "name",
+      "category",
+      "unit",
+      "price",
+      "stock",
+      "note"
+    ],
+    "key": "sku",
+    "immutable": [
+      "sku",
+      "name",
+      "category",
+      "unit",
+      "price",
+      "stock",
+      "note"
+    ],
+    "allowed_units": [
+      "pcs",
+      "kg",
+      "m",
+      "box"
+    ],
+    "allowed_categories": [
+      "milk",
+      "tea",
+      "topping",
+      "syrup",
+      "powder",
+      "packaging",
+      "supplies"
+    ],
+    "price_positive": true,
+    "copy": {
+      "max_chars": 160,
+      "must_mention": [
+        "name",
+        "unit"
+      ],
+      "banned_phrases": [
+        "guaranteed",
+        "best in the world",
+        "100% organic",
+        "cures"
+      ]
+    }
+  },
+  "createdAt": 1793433563070
+}

@@ -23,6 +23,7 @@ const STEP_LABELS = Object.freeze({
   'plan.proposed': 'Planner proposes a hire',
   'plan.rejected': 'Planner reply refused by the schema',
   'agent.unavailable': 'An agent on the list cannot be hired',
+  'acceptance.reviewed': 'A person corrected the check',
   'owner.asked': 'The reviewer asks the owner',
   'owner.approved': 'The owner approves',
   'owner.rejected': 'The owner says no',
