@@ -1,6 +1,6 @@
 # Mission: Payable
 
-Agents can hire agents, on a leash.
+Agents collaborate.
 
 A shop owner hands an agent a data job whose acceptance rules can be written down. The agent hires specialist agents through Masumi escrow on Cardano Preprod, checks every quote against its mandate before paying, and requests a refund when the delivered work fails its acceptance test.
 
