@@ -2,7 +2,7 @@
 .env.*
 !.env.example
 .local/
-node_modules/
+node_modules
 .eve/
 .workflow/
 .output/
