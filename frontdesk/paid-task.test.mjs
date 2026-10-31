@@ -130,3 +130,52 @@ test('paid execution rejects another Workspace or Coworker before any saved stat
  ])await assert.rejects(adapter.advance(task,{input:'abc'}),/configured Coworker and Workspace/);
  assert.equal(writes,0);
 });
+
+const asked=(state='Disputed',requestedAction='WaitingForExternalAction')=>({...payment,onChainState:state,NextAction:{requestedAction}});
+function refundWorld({observed=asked(),decision='person',answerOfPerson=null}){
+ const calls=[];const{core,posts}=coreCounting();let reviews=0;
+ const mps=async(path,body)=>{calls.push({path,body});return path.includes('resolve')?observed:{};};
+ const made=createPaidAdapter({target,core,registration,save:async()=>{},answer:async()=>{throw Error('unexpected model')},mps,refundAnswer:()=>answerOfPerson,reviewRefund:async()=>{reviews+=1;return{decision,reason:'because'};}});
+ return{made,posts,authorized:()=>calls.filter(({path})=>path.endsWith('authorize-refund')).length,reviews:()=>reviews};
+}
+const delivered={input:'abc',phase:'completed',paid:{stage:'awaiting-withdrawal',payment,resultHash:'h'}};
+test('Jev agrees to a refund: the front desk authorizes it once and tells nobody to wait',async()=>{
+ const w=refundWorld({decision:'refund'});const adapter=await w.made;
+ const state=await adapter.advance(task,delivered);
+ assert.equal(w.authorized(),1);assert.equal(state.paid.refund.authorized,true);assert.equal(w.posts.length,0);
+ await adapter.advance(task,state);
+ assert.equal(w.authorized(),1);assert.equal(w.reviews(),1);
+});
+test('Jev does not agree: nothing is authorized and the owner hears a person will review it, once',async()=>{
+ const w=refundWorld({});const adapter=await w.made;
+ const state=await adapter.advance(task,delivered);
+ assert.equal(w.authorized(),0);assert.equal(w.posts.length,1);assert.match(w.posts[0].comment,/person will review/);
+ await adapter.advance(task,state);
+ assert.equal(w.posts.length,1);assert.equal(w.reviews(),1);
+});
+test('a person approves what Jev did not: the refund is authorized',async()=>{
+ const w=refundWorld({answerOfPerson:'approve'});const adapter=await w.made;
+ const state=await adapter.advance(task,delivered);
+ assert.equal(w.authorized(),1);assert.equal(state.paid.refund.authorized,true);
+});
+test('a person keeps the payment: nothing is authorized and the owner is told why',async()=>{
+ const w=refundWorld({answerOfPerson:'keep'});const adapter=await w.made;
+ await adapter.advance(task,delivered);
+ assert.equal(w.authorized(),0);assert.equal(w.posts.length,2);assert.match(w.posts[1].comment,/did not agree/);
+});
+test('another transaction in flight: the authorization waits for the next look',async()=>{
+ const w=refundWorld({decision:'refund',observed:asked('Disputed','WithdrawInitiated')});const adapter=await w.made;
+ await adapter.advance(task,delivered);
+ assert.equal(w.authorized(),0);
+});
+test('a request before the result is treated the same way',async()=>{
+ const w=refundWorld({decision:'refund',observed:asked('RefundRequested')});const adapter=await w.made;
+ const state=await adapter.advance(task,{input:'abc',paid:{stage:'awaiting-escrow',payment}});
+ assert.equal(w.authorized(),1);assert.equal(state.paid.refund.authorized,true);
+});
+test('money back ends the task watching it',async()=>{
+ const w=refundWorld({observed:asked('RefundWithdrawn')});const adapter=await w.made;
+ const state=await adapter.advance(task,delivered);
+ assert.equal(state.paid.stage,'refunded');assert.equal(w.reviews(),0);
+ assert.equal(await adapter.advance(task,state),state);
+});

@@ -6,6 +6,8 @@ import {loadSokosumiRuntime} from './sokosumi-runtime.mjs';
 import {taskTarget,assertTaskTarget,verifyRuntimeTask} from './task-target.mjs';
 const MINUTE=60*1000;
 const MAX_TELL_TRIES=3;
+const REFUND_ASKED=['Disputed','RefundRequested'];
+const savedRefundAnswer=(taskId)=>{const path=`.local/${taskId}-refund-answer.json`;return existsSync(path)?JSON.parse(readFileSync(path,'utf8')).answer:null;};
 export const USDM='16a55b2a349361ff88c03788f93e1e966e5d689605d044fef722ddde0014df10745553444d';
 export function taskHash(text){return createHash('sha256').update(text,'utf8').digest('hex')}
 export function confirmedState(payment,expected){
@@ -31,7 +33,7 @@ export function isPaidReady(){
  const r=JSON.parse(readFileSync('docs/registration-state.json','utf8'));
  return r.status==='RegistrationConfirmed'||r.registrationState==='RegistrationConfirmed'||r.registration?.state==='RegistrationConfirmed';
 }
-export async function createPaidAdapter({save,answer,core:providedCore,mps:providedMps,registration:providedRegistration,target=taskTarget()}){
+export async function createPaidAdapter({save,answer,core:providedCore,mps:providedMps,registration:providedRegistration,target=taskTarget(),reviewRefund=async()=>({decision:'person',reason:'No reviewer is set up'}),refundAnswer=savedRefundAnswer}){
  const registration=()=>providedRegistration??JSON.parse(readFileSync('docs/registration-state.json','utf8'));
  let core=providedCore;
  async function getCore(){
@@ -59,6 +61,35 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
  async function failJob(task,state,p,failure){
   const next={...p,stage:'job-failed',failure};
   return tellOwner(task,await persist(task,state,next),next);
+ }
+ async function sayToOwner(task,state,p,field,comment){
+  const tries=p.refund[`${field}Tries`]??0;
+  if(p.refund[field]||tries>=MAX_TELL_TRIES)return p;
+  const counted={...p,refund:{...p.refund,[`${field}Tries`]:tries+1}};
+  await persist(task,state,counted);
+  await (await verifyRuntimeTask(await getCore(),task.id,target)).post(`/v1/tasks/${encodeURIComponent(task.id)}/events`,{comment});
+  return {...counted,refund:{...counted.refund,[field]:true}};
+ }
+ // The owner asked for the fee back. Jev reads our records first, and whatever it does not agree to goes to a person.
+ async function handleRefund(task,state,p){
+  if(p.refund?.authorized)return state;
+  let current=p;
+  if(!current.refund){
+   const {decision,reason}=await reviewRefund({taskId:task.id,paid:current});
+   console.log(`Refund request on ${task.id}: ${decision}. ${reason}`);
+   current={...current,refund:{decision,reason}};
+   state=await persist(task,state,current);
+  }
+  const person=refundAnswer(task.id);
+  if(current.refund.decision!=='refund'&&person!=='approve'){
+   current=await sayToOwner(task,state,current,'personTold','We received your refund request. A person will review it.');
+   if(person==='keep')current=await sayToOwner(task,state,current,'keepTold','Our records show this work was delivered and passed its checks, so we did not agree to the refund. The payment stays in escrow until the dispute time.');
+   return persist(task,state,current);
+  }
+  if(current.observed?.NextAction?.requestedAction!=='WaitingForExternalAction')return state;
+  state=await persist(task,state,{...current,refund:{...current.refund,authorizePending:true}});
+  await mps('/api/v1/payment/authorize-refund',{network:'Preprod',blockchainIdentifier:current.payment.blockchainIdentifier});
+  return persist(task,state,{...current,refund:{...current.refund,authorized:true}});
  }
  const isLate=(p)=>Date.now()>=Number(p.payment.submitResultTime);
  const lateFailure='the result deadline passed before the work was done';
@@ -97,6 +128,8 @@ export async function createPaidAdapter({save,answer,core:providedCore,mps:provi
   if(['awaiting-escrow','awaiting-result','awaiting-withdrawal'].includes(p.stage)){
    const observed=await mps('/api/v1/payment/resolve-blockchain-identifier',{network:'Preprod',blockchainIdentifier:p.payment.blockchainIdentifier,includeHistory:'true'});
    p={...p,observed};state=await persist(task,state,p);
+   if(observed.onChainState==='RefundWithdrawn')return persist(task,state,{...p,stage:'refunded'});
+   if(REFUND_ASKED.includes(observed.onChainState))return handleRefund(task,state,p);
    if(p.stage==='awaiting-escrow'){
     if(observed.onChainState!=='FundsLocked'||!confirmedState(observed,'FundsLocked'))return state;
     if(isLate(p))return failJob(task,state,p,lateFailure);

@@ -26,7 +26,7 @@ const QUESTIONS = Object.freeze({
   ),
 });
 
-function jevDecide() {
+export function jevDecide() {
   let client;
   return ({state, questions}) => {
     client ??= new TypeSafeClient();
