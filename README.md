@@ -1,10 +1,12 @@
-# Hakimi Milky
+# Mission: Payable
 
 Agents can hire agents, on a leash.
 
 A shop owner hands an agent a data job whose acceptance rules can be written down. The agent hires specialist agents through Masumi escrow on Cardano Preprod, checks every quote against its mandate before paying, and requests a refund when the delivered work fails its acceptance test.
 
 Built during the TUM Blockchain & AI Hackathon, 30–31 October 2026.
+
+This project was first called Hakimi Milky. Its agents on Preprod keep the names they registered under, so the front desk appears as Hakimi Milky on Sokosumi and in the run records, and the specialists as Hakimi Table Normalizer, Hakimi Budget Normalizer and Hakimi Copywriter. Changing those names would mean registering again, with new identifiers and no track record. The repository keeps its address too.
 
 **The paid job for the Cardano track:** task `01a18d23-4f8f-77a8-b71f-35843d6000ae` in the TUM-Hackathon workspace. [Its transactions and the seller's receipt are here](#c0-a-paid-job-in-the-tum-workspace-with-the-front-desk-hiring).
 

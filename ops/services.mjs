@@ -187,5 +187,5 @@ export function keepAwake(log) {
 export function desktopNotify(message) {
   if (process.platform !== 'darwin') return;
   const text = message.replace(/["\\]/g, '');
-  spawn('osascript', ['-e', `display notification "${text}" with title "Hakimi Milky"`], {stdio: 'ignore', detached: true}).unref();
+  spawn('osascript', ['-e', `display notification "${text}" with title "Mission: Payable"`], {stdio: 'ignore', detached: true}).unref();
 }

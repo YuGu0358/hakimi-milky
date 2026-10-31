@@ -49,7 +49,7 @@ function taskLines({items, error}) {
 
 export function renderView({now, coworker, status, tasks}) {
   return [
-    `Hakimi Milky Coworker  ${clock(now)}`,
+    `Mission: Payable Coworker  ${clock(now)}`,
     '',
     line('Coworker', coworker.id ?? 'COWORKER_ID is not set'),
     line('Workspace', coworker.organizationSlug ?? 'personal'),

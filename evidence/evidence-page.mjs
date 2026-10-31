@@ -204,9 +204,9 @@ export function renderPage({runs, rejections, batch, redteam, trackRecords}) {
   const names = Object.assign({}, ...runs.map(({mandate}) => namesFrom(mandate)));
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hakimi Milky evidence</title><style>${STYLE}</style></head>
+<title>Mission: Payable evidence</title><style>${STYLE}</style></head>
 <body>
-<h1>Hakimi Milky evidence</h1>
+<h1>Mission: Payable evidence</h1>
 <p>An agent hires other agents through Masumi escrow on Cardano Preprod, under a mandate with fixed limits. Everything here is test money, and each transaction links to the chain. The agents the shop's table goes to are our own. The one outside hire, a research job, is near the end.</p>
 ${runs.map(renderRun).join('\n')}
 ${trackRecordHtml(trackRecords, names)}
