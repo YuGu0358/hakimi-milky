@@ -20,10 +20,12 @@ export function createMandate({
   frontDeskDeadline = null,
   limits = DEMO_LIMITS,
   unit = USDM_UNIT,
+  deliverMinutes = STANDALONE_DELIVERY_MINUTES,
+  lockMinutes = LOCK_MINUTES,
 }) {
   const deliverBy = frontDeskDeadline
     ? frontDeskDeadline - FRONT_DESK_MARGIN_MINUTES * MINUTE_MS
-    : startedAt + STANDALONE_DELIVERY_MINUTES * MINUTE_MS;
+    : startedAt + deliverMinutes * MINUTE_MS;
   return Mandate.parse({
     id: `mandate-${taskId}`,
     taskId,
@@ -32,7 +34,7 @@ export function createMandate({
     maxHires: limits.maxHires,
     allowlist,
     deliverBy,
-    lockUntil: startedAt + LOCK_MINUTES * MINUTE_MS,
+    lockUntil: startedAt + lockMinutes * MINUTE_MS,
     acceptance,
     createdAt: startedAt,
   });

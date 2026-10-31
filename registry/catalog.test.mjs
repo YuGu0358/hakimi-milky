@@ -55,7 +55,7 @@ test('every page is read, not only the newest ones, so an old agent is counted',
   assert.ok(entries.some(({agentIdentifier}) => agentIdentifier === idIn(current, 0)));
 });
 
-test('the older registry is read too, and its agents are counted but marked as not payable here', async () => {
+test('the older registry is read too, in its own format', async () => {
   const pages = {[current.policy]: [livePage(current, 0, 1)], [older.policy]: [livePage(older, 0, 2)]};
   const {get} = chain({pages, metadataOf: (id) => (id.startsWith(older.policy) ? olderMetadata() : currentMetadata())});
 
@@ -63,11 +63,8 @@ test('the older registry is read too, and its agents are counted but marked as n
 
   const row = summary.find(({name}) => name === older.name);
   assert.equal(row.live, 2);
-  assert.equal(row.hireableHere, 0);
-  assert.equal(summary.find(({name}) => name === current.name).hireableHere, 1);
+  assert.equal(row.hireableHere, 2);
   const old = entries.find(({registry}) => registry === older.name);
-  assert.equal(old.hireableHere, false);
-  assert.match(old.why, /contract/);
   assert.equal(old.pricingType, 'Fixed');
   assert.deepEqual(old.price, {unit: '', amount: '1000000'});
 });

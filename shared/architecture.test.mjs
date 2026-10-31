@@ -32,6 +32,8 @@ const WIRING = new Set([
   'orchestrator/run-redteam.mjs',
   'orchestrator/run-reconcile.mjs',
   'orchestrator/run-owner.mjs',
+  'orchestrator/run-third-party.mjs',
+  'ops/connect-older-contract.mjs',
   'orchestrator/crash-test.mjs',
   'registry/run-allow.mjs',
   'orchestrator/batch.mjs',

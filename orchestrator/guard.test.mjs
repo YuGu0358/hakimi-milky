@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkProposal, guard} from './guard.mjs';
-import {inputHash} from '../shared/hash.mjs';
+import {inputDataHash, inputHash} from '../shared/hash.mjs';
 import {MINUTE_MS, USDM_UNIT} from '../shared/constants.mjs';
 import acceptance from '../shared/fixtures/acceptance.json' with {type: 'json'};
 import agents from '../shared/fixtures/agents.json' with {type: 'json'};
@@ -279,4 +279,20 @@ test('a quote that leaves no time to ask for a refund is refused', () => {
 test('a quote naming another payment source is refused before any order', () => {
   assert.equal(guard(ctx({quote: quote({paymentSourceType: 'Web3CardanoV1'})})).code, 'G1_WRONG_PAYMENT_SOURCE');
   assert.equal(guard(ctx({expectedSourceIndex: 3})).code, 'G1_WRONG_PAYMENT_SOURCE');
+});
+
+test('a quote may use the older contract only when the listing says so', () => {
+  const older = quote({paymentSourceType: 'Web3CardanoV1'});
+
+  assert.equal(guard(ctx({quote: older})).code, 'G1_WRONG_PAYMENT_SOURCE');
+  assert.equal(guard(ctx({quote: older, expectedSourceType: 'Web3CardanoV1'})).ok, true);
+});
+
+test('the input check works for an outside agent\'s own fields', () => {
+  const input = {research_question: 'What should a shop check?'};
+  const nonce = quote().identifierFromPurchaser;
+  const hash = inputDataHash(input, nonce);
+
+  assert.equal(guard(ctx({input, quote: quote({inputHash: hash})})).ok, true);
+  assert.equal(guard(ctx({input: {research_question: 'Something else'}, quote: quote({inputHash: hash})})).code, 'G3_INPUT_HASH_MISMATCH');
 });

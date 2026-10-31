@@ -1,6 +1,6 @@
 import {NETWORK} from '../shared/constants.mjs';
 import {PaymentsError} from '../shared/errors.mjs';
-import {jobPrompt, purchaseViewFrom, quoteFromStartJob} from '../shared/schemas.mjs';
+import {jobInput, purchaseViewFrom, quoteFromStartJob} from '../shared/schemas.mjs';
 import {createMps} from '../specialists/mps.mjs';
 
 // The real payment client: the same six functions as mock.mjs, with the same return shapes.
@@ -76,11 +76,11 @@ export function createPayments({mpsUrl, token, readAgents = async () => []}) {
         {
           method: 'POST',
           headers: {'content-type': 'application/json'},
-          body: JSON.stringify({identifier_from_purchaser: nonce, input_data: {prompt: jobPrompt(job)}}),
+          body: JSON.stringify({identifier_from_purchaser: nonce, input_data: jobInput(job)}),
         },
         sellerError,
       );
-      return quoteFromStartJob(data);
+      return quoteFromStartJob(data, agent);
     },
 
     async purchase(quote, metadata, amounts) {

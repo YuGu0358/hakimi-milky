@@ -1,7 +1,7 @@
 import {randomBytes} from 'node:crypto';
 import {MINUTE_MS} from '../shared/constants.mjs';
 import {PaymentsError} from '../shared/errors.mjs';
-import {isConfirmed, jobPrompt} from '../shared/schemas.mjs';
+import {isConfirmed, jobInput} from '../shared/schemas.mjs';
 import {accept} from './acceptance.mjs';
 import {chainProgress} from './chain-progress.mjs';
 import {checkProposal} from './guard.mjs';
@@ -191,8 +191,7 @@ export function createHirer({
 
   async function startAndFollow(base, proposal, listing, job) {
     const nonce = newNonce();
-    const prompt = jobPrompt(job);
-    const started = {...base, nonce, prompt, job, listing};
+    const started = {...base, nonce, input: jobInput(job), job, listing};
     record(started, 'job.pending');
     let quote;
     try {
@@ -251,7 +250,7 @@ export function createHirer({
       proposalId: purchase.proposalId,
       subtask: purchase.subtask,
       job,
-      prompt: jobPrompt(job),
+      input: jobInput(job),
       nonce: purchase.nonce,
       quote: purchase.terms,
       price: {unit: purchase.amount.unit, amount: purchase.amount.value},

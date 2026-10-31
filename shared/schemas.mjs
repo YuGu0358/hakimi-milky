@@ -6,7 +6,8 @@ const EpochMs = z.coerce.number().int().positive();
 const Hex = z.string().regex(/^[0-9a-fA-F]+$/, 'must be hex');
 
 export const SUBTASKS = Object.freeze(['normalize', 'copy']);
-const Subtask = z.enum(SUBTASKS);
+// A research job is not part of the table pipeline: it is one hire of an agent we do not run.
+const Subtask = z.enum([...SUBTASKS, 'research']);
 
 export const Price = z.object({unit: z.string().max(150), amount: AtomicAmount});
 
@@ -60,7 +61,8 @@ export const Listing = z.object({
   apiBaseUrl: z.string().min(1),
   pricingType: z.enum(['Fixed', 'Dynamic', 'Free']),
   price: Price.nullable(),
-  supportedPaymentSourceIndex: z.number().int().min(0),
+  supportedPaymentSourceIndex: z.number().int().min(0).optional(),
+  paymentSourceType: z.string().min(1).optional(),
   tags: z.array(z.string()),
 });
 
@@ -70,6 +72,9 @@ export const Job = z.object({
   acceptance: AcceptanceSpec,
   key: z.string().min(1),
 });
+
+// What goes to the seller as input_data. An outside agent's own input fields, or our one prompt.
+export const jobInput = (job) => job.input ?? {prompt: jobPrompt(job)};
 
 export function jobPrompt(job) {
   const prompt = JSON.stringify(Job.parse(job));
@@ -87,7 +92,7 @@ export const Quote = z.object({
   inputHash: Hex,
   identifierFromPurchaser: Hex,
   paymentSourceType: z.string().min(1),
-  supportedPaymentSourceIndex: z.number().int().min(0),
+  supportedPaymentSourceIndex: z.number().int().min(0).optional(),
   payByTime: EpochMs,
   submitResultTime: EpochMs,
   unlockTime: EpochMs,
@@ -95,7 +100,7 @@ export const Quote = z.object({
 });
 
 // Maps the starter's start_job response, which mixes input_hash and sellerVKey, to Quote.
-export function quoteFromStartJob(raw) {
+export function quoteFromStartJob(raw, listing = {}) {
   return Quote.parse({
     jobId: raw.id ?? raw.job_id,
     blockchainIdentifier: raw.blockchainIdentifier,
@@ -103,8 +108,8 @@ export function quoteFromStartJob(raw) {
     sellerVkey: raw.sellerVKey ?? raw.sellerVkey,
     inputHash: raw.input_hash ?? raw.inputHash,
     identifierFromPurchaser: raw.identifierFromPurchaser,
-    paymentSourceType: raw.paymentSourceType,
-    supportedPaymentSourceIndex: raw.supportedPaymentSourceIndex,
+    paymentSourceType: raw.paymentSourceType ?? listing.paymentSourceType,
+    supportedPaymentSourceIndex: raw.supportedPaymentSourceIndex ?? undefined,
     payByTime: raw.payByTime,
     submitResultTime: raw.submitResultTime,
     unlockTime: raw.unlockTime,

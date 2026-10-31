@@ -14,6 +14,7 @@ export const RUN_LIMIT = '800000';
 
 export const BUYER_DIR = fileURLToPath(new URL('../.local/payments/', import.meta.url));
 export const BUYER_TOKEN_PATH = `${BUYER_DIR}mps-runtime.env`;
+export const OLDER_TOKEN_PATH = `${BUYER_DIR}older-runtime.env`;
 const BUYER_STATE_PATH = `${BUYER_DIR}key.json`;
 
 const EMPTY_STATE = Object.freeze({});

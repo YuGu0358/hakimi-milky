@@ -73,7 +73,6 @@ test('an old agent on the current registry goes on the list under the owner\'s n
 const refusals = [
   ['the owner has not agreed to send the table', {shareTable: false}, 'table_not_shared'],
   ['a name with markup', {alias: '<b>Pay me</b>'}, 'bad_name'],
-  ['the older registry', {agentIdentifier: `${older.policy}6f6c64`}, 'in_older_registry'],
   ['an unknown policy', {agentIdentifier: `${'00'.repeat(28)}6f6c64`}, 'unknown_registry'],
   ['a burned agent', {quantity: '0'}, 'not_live'],
   ['no metadata', {metadata: null}, 'not_live'],
@@ -120,4 +119,19 @@ test('our own agents win over a pin of the same id, and a new pin is added', () 
 
 test('a damaged pin file stops the run instead of widening the list', () => {
   assert.throws(() => mergedAllowlist([], [{agentIdentifier: 'short'}]));
+});
+
+test('an agent on the older registry goes on the list, marked as paid through the older contract', () => {
+  const olderMetadata = {
+    name: ['Old researcher'],
+    api_base_url: ['https://old.masumi.network/x'],
+    tags: [],
+    agentPricing: {pricingType: 'Fixed', fixedPricing: [{unit: [USDM_UNIT.slice(0, 40), USDM_UNIT.slice(40)], amount: '10000'}]},
+    metadata_version: '1',
+  };
+
+  const {entry} = checkAdmission(request({agentIdentifier: `${older.policy}6f6c64`, metadata: olderMetadata, role: 'research'}));
+
+  assert.equal(entry.role, 'research');
+  assert.equal(entry.apiBaseUrl, 'https://old.masumi.network/x');
 });

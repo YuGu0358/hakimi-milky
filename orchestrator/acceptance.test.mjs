@@ -177,3 +177,13 @@ test('A6 rejects a banned phrase in any case', () => {
   const copy = {...goodCopy, 'HM-001': `${goodCopy['HM-001']} GUARANTEED fresh.`};
   assert.deepEqual(failure(checkCopy(copy), 'A6_BANNED_PHRASE').skus, ['HM-001']);
 });
+
+test('an outside agent\'s answer passes on its committed text, as text or as a JSON string', () => {
+  const text = 'x'.repeat(300);
+  const answer = (onChainResultHash, resultText = text) => accept({kind: 'research', resultText, nonce, onChainResultHash});
+
+  assert.equal(answer(resultHash(text, nonce)).ok, true);
+  assert.equal(answer(resultHash(JSON.stringify(text), nonce)).ok, true);
+  assert.equal(answer('ee'.repeat(32)).ok, false);
+  assert.equal(answer(resultHash('short', nonce), 'short').failures[0].code, 'A2_TOO_SHORT');
+});

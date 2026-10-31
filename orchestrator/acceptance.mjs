@@ -118,7 +118,20 @@ export function checkCopy({spec, inputTable, resultText}) {
 }
 
 // Lists every failure instead of stopping at the first, so the evidence names all of them.
+// An outside agent's answer. We cannot check what it says, only that it is the text it committed to and not empty.
+// Outside agents hash either the text or the text as a JSON string.
+const MIN_ANSWER_CHARS = 200;
+function acceptAnswer({resultText, nonce, onChainResultHash}) {
+  const matches = [resultText, JSON.stringify(resultText)].some((text) => checkHash({resultText: text, nonce, onChainResultHash}).length === 0);
+  const failures = [
+    ...(matches ? [] : checkHash({resultText, nonce, onChainResultHash})),
+    ...whenAny('A2', 'A2_TOO_SHORT', `An answer has at least ${MIN_ANSWER_CHARS} characters`, resultText.trim().length < MIN_ANSWER_CHARS ? ['answer'] : []),
+  ];
+  return {ok: failures.length === 0, failures};
+}
+
 export function accept({kind, spec, inputTable, resultText, nonce, onChainResultHash}) {
+  if (kind === 'research') return acceptAnswer({resultText, nonce, onChainResultHash});
   const checkContent = kind === 'copy' ? checkCopy : checkTable;
   const failures = [
     ...checkHash({resultText, nonce, onChainResultHash}),

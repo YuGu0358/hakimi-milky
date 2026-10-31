@@ -1,5 +1,5 @@
 import {PAYMENT_SOURCE_TYPE} from '../shared/constants.mjs';
-import {inputHash} from '../shared/hash.mjs';
+import {inputDataHash} from '../shared/hash.mjs';
 
 // The guard is deterministic code with no model in it. It answers one question:
 // does this owner's mandate allow this payment? Everything it needs arrives as input,
@@ -38,8 +38,8 @@ function checkQuoteAgent({quote, expectedAgent}) {
 }
 
 // The Payment Service would refuse these too, but only after the seller already has the table.
-function checkPaymentSource({quote, expectedSourceIndex}) {
-  if (quote.paymentSourceType !== PAYMENT_SOURCE_TYPE) return deny('G1', 'G1_WRONG_PAYMENT_SOURCE', 'The quote names another payment source type');
+function checkPaymentSource({quote, expectedSourceIndex, expectedSourceType = PAYMENT_SOURCE_TYPE}) {
+  if (quote.paymentSourceType !== expectedSourceType) return deny('G1', 'G1_WRONG_PAYMENT_SOURCE', 'The quote names another payment source type');
   return expectedSourceIndex === undefined || quote.supportedPaymentSourceIndex === expectedSourceIndex
     ? allow()
     : deny('G1', 'G1_WRONG_PAYMENT_SOURCE', 'The quote names another payment source than the listing');
@@ -73,11 +73,11 @@ function checkSpend({mandate, ledger, price}) {
   return allow();
 }
 
-function checkInput({quote, prompt, nonce}) {
+function checkInput({quote, prompt, input, nonce}) {
   if (quote.identifierFromPurchaser !== nonce) {
     return deny('G3', 'G3_NONCE_MISMATCH', 'Quote does not echo the purchaser nonce we sent');
   }
-  return quote.inputHash === inputHash({prompt}, nonce)
+  return quote.inputHash === inputDataHash(input ?? {prompt}, nonce)
     ? allow()
     : deny('G3', 'G3_INPUT_HASH_MISMATCH', 'Quote is bound to a different input than the one we sent');
 }
