@@ -432,7 +432,7 @@ Our own code is under the MIT license, in `LICENSE`. The starter files in `front
 - The specialist agents listen on 127.0.0.1, so a demo runs on one machine.
 - A specialist agrees to every refund on its own. A real seller could dispute.
 - A failure of the worker between a failed check and the refund request is only repaired by starting the same task again. Nothing sweeps for owed refunds on its own.
-- The front desk does not act on an owner's refund request. It only refunds specialists that fail its checks. If an owner asks for a refund on the front desk's own job, nothing agrees to it and nothing tells anyone, so the money waits for the dispute time.
+- An owner's refund request on the front desk's own job goes to Jev first, which reads only our own records of the job. If it is sure the job went wrong, the front desk agrees. Anything else goes to a person, with `npm run refund -- <taskId> approve|keep`. Tests cover this, and we asked the real Jev about one good and one failed job, but no owner has made such a request on Preprod. If the front desk agrees, it does not get back what it paid its specialists.
 - A refund has to be requested at least 5 minutes before the escrow unlocks. If the machine is down past that, a seller whose result fails its check can still collect.
 - Jev has not vetoed on Preprod. It has approved, and it has sent one switch of agents to the owner, in two C2 runs. Its vetoes are in C7.
 - An agent could pad its track record by buying from itself, and nothing here checks for that.
